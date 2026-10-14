@@ -1300,7 +1300,7 @@ const LEGACY_DUMMY_IDS = [
   'org-delicateses-teques'
 ];
 
-export function syncOrganizationToMasterRegistry(org: Partial<OrganizationAdminRecord>): void {
+export async function syncOrganizationToMasterRegistry(org: Partial<OrganizationAdminRecord>): Promise<void> {
   try {
     if (!org.id || LEGACY_DUMMY_IDS.includes(org.id)) return;
     const raw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
@@ -1331,7 +1331,7 @@ export function syncOrganizationToMasterRegistry(org: Partial<OrganizationAdminR
 
     // Persist directly to Firestore organizations collection
     try {
-      setDoc(doc(db, ORGANIZATIONS_COLLECTION, org.id), org, { merge: true });
+      await setDoc(doc(db, ORGANIZATIONS_COLLECTION, org.id), org, { merge: true });
     } catch (fsErr) {
       console.warn('Could not sync org directly to Firestore:', fsErr);
     }

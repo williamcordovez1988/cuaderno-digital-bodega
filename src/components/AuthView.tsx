@@ -5,19 +5,22 @@ import {
   loginWithGoogleMultiTenant,
   AuthSession
 } from '../firebase/authService';
+import { DirectPaymentModal } from './DirectPaymentModal';
 
 interface AuthViewProps {
   initialMode?: 'login' | 'register';
   onAuthSuccess: (session: AuthSession) => void;
   onNavigate: (path: string) => void;
   onShowToast: (msg: string, icon?: string) => void;
+  bcvRate?: number;
 }
 
 export const AuthView: React.FC<AuthViewProps> = ({
   initialMode = 'login',
   onAuthSuccess,
   onNavigate,
-  onShowToast
+  onShowToast,
+  bcvRate = 877.90
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [loading, setLoading] = useState(false);
@@ -31,8 +34,17 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [planSuscripcion, setPlanSuscripcion] = useState<'gratuito' | 'pro' | 'premium'>('pro');
 
+  // Mandatory Payment Modal State for Paid Plans
+  const [isDirectPaymentOpen, setIsDirectPaymentOpen] = useState(false);
+  const [registeredPaidOrg, setRegisteredPaidOrg] = useState<{
+    nombreNegocio: string;
+    email: string;
+    plan: 'pro' | 'premium';
+  } | null>(null);
+
   const switchMode = (newMode: 'login' | 'register') => {
     setErrorMessage(null);
+    setRegisteredPaidOrg(null);
     setMode(newMode);
     onNavigate(newMode === 'register' ? '/register' : '/login');
   };
@@ -95,7 +107,20 @@ export const AuthView: React.FC<AuthViewProps> = ({
         password,
         planSuscripcion
       });
-      onShowToast(`¡Negocio "${session.organization.nombre_negocio}" registrado con éxito!`, 'check_circle');
+
+      if (planSuscripcion === 'pro' || planSuscripcion === 'premium') {
+        // Enforce mandatory payment: DO NOT redirect to dashboard!
+        setRegisteredPaidOrg({
+          nombreNegocio: session.organization.nombre_negocio,
+          email: session.organization.ownerEmail || email.trim(),
+          plan: planSuscripcion
+        });
+        setIsDirectPaymentOpen(true);
+        onShowToast(`¡Bodega registrada! Por favor completa tu pago para activar tu cuenta.`, 'payments');
+        return;
+      }
+
+      onShowToast(`¡Bienvenido! Tu cuenta con Plan Gratuito está lista.`, 'check_circle');
       onAuthSuccess(session);
     } catch (err: any) {
       setErrorMessage(mapAuthError(err));
@@ -116,6 +141,18 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setLoading(true);
     try {
       const session = await loginWithEmail(email, password);
+      if (session.organization?.subscriptionStatus === 'pendiente_pago') {
+        // Enforce mandatory payment: block dashboard access and open payment modal
+        setRegisteredPaidOrg({
+          nombreNegocio: session.organization.nombre_negocio,
+          email: session.organization.ownerEmail || email.trim(),
+          plan: (session.organization.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro'
+        });
+        setIsDirectPaymentOpen(true);
+        onShowToast('Tu cuenta aún está Pendiente de Activación por el Super Admin.', 'payments');
+        return;
+      }
+
       onShowToast(`¡Bienvenido de nuevo a ${session.organization.nombre_negocio}!`, 'storefront');
       onAuthSuccess(session);
     } catch (err: any) {
@@ -131,6 +168,17 @@ export const AuthView: React.FC<AuthViewProps> = ({
     try {
       const defaultOrgName = nombreNegocio.trim() ? nombreNegocio.trim() : undefined;
       const session = await loginWithGoogleMultiTenant(defaultOrgName);
+      if (session.organization?.subscriptionStatus === 'pendiente_pago') {
+        setRegisteredPaidOrg({
+          nombreNegocio: session.organization.nombre_negocio,
+          email: session.organization.ownerEmail || session.user.email || '',
+          plan: (session.organization.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro'
+        });
+        setIsDirectPaymentOpen(true);
+        onShowToast('Tu cuenta está Pendiente de Activación por el Super Admin.', 'payments');
+        return;
+      }
+
       onShowToast(`¡Bienvenido a ${session.organization.nombre_negocio}!`, 'check_circle');
       onAuthSuccess(session);
     } catch (err: any) {
@@ -182,33 +230,82 @@ export const AuthView: React.FC<AuthViewProps> = ({
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-lg">
         <div className="bg-white py-8 px-5 sm:px-10 shadow-md rounded-2xl border border-[#E8E2D8]">
           
-          {/* Mode Switcher Tabs */}
-          <div className="flex rounded-xl bg-[#f0f3ff] p-1 mb-6 border border-[#dbc2b0]/30">
-            <button
-              type="button"
-              onClick={() => switchMode('login')}
-              className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                mode === 'login'
-                  ? 'bg-white text-[#8d4b00] shadow-xs'
-                  : 'text-[#554336] hover:text-[#111c2d]'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[18px]">login</span>
-              Iniciar Sesión
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode('register')}
-              className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                mode === 'register'
-                  ? 'bg-[#8d4b00] text-white shadow-xs'
-                  : 'text-[#554336] hover:text-[#111c2d]'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[18px]">storefront</span>
-              Registrar Negocio
-            </button>
-          </div>
+          {registeredPaidOrg ? (
+            <div className="space-y-4 text-center animate-in fade-in py-2">
+              <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-sm">
+                <span className="material-symbols-outlined text-[36px] animate-pulse">schedule</span>
+              </div>
+              <div>
+                <span className="inline-block px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300 mb-2">
+                  Plan {registeredPaidOrg.plan.toUpperCase()} • Activación Requerida
+                </span>
+                <h3 className="text-xl font-black text-[#111c2d]">
+                  ¡Bodega Registrada con Éxito!
+                </h3>
+                <p className="text-xs text-[#554336] mt-1 leading-relaxed">
+                  Tu comercio <strong>"{registeredPaidOrg.nombreNegocio}"</strong> está guardado en el sistema con estado <strong>Pendiente de Pago</strong>.
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-amber-50 border border-amber-200/80 rounded-2xl text-xs text-amber-900 text-left space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <span className="material-symbols-outlined text-[17px] text-amber-700">verified_user</span>
+                  <span>Verificación por el Super Admin</span>
+                </div>
+                <p className="text-[11px] text-[#554336] leading-relaxed">
+                  Por políticas de seguridad, el acceso al panel contable para planes Pro y Premium requiere confirmar tu pago vía Pago Móvil, Binance Pay o Zinli.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsDirectPaymentOpen(true)}
+                className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[20px]">payments</span>
+                Ver Datos de Pago y Reportar por WhatsApp
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRegisteredPaidOrg(null);
+                  switchMode('login');
+                }}
+                className="text-xs font-bold text-[#8d4b00] hover:underline cursor-pointer block mx-auto pt-2"
+              >
+                ← Volver a Iniciar Sesión con otra cuenta
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Mode Switcher Tabs */}
+              <div className="flex rounded-xl bg-[#f0f3ff] p-1 mb-6 border border-[#dbc2b0]/30">
+                <button
+                  type="button"
+                  onClick={() => switchMode('login')}
+                  className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    mode === 'login'
+                      ? 'bg-white text-[#8d4b00] shadow-xs'
+                      : 'text-[#554336] hover:text-[#111c2d]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">login</span>
+                  Iniciar Sesión
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode('register')}
+                  className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    mode === 'register'
+                      ? 'bg-[#8d4b00] text-white shadow-xs'
+                      : 'text-[#554336] hover:text-[#111c2d]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">storefront</span>
+                  Registrar Bodega
+                </button>
+              </div>
 
           {/* Error Banner */}
           {errorMessage && (
@@ -381,7 +478,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
-                    Registrar Negocio y Comenzar
+                    Registrar Bodega y Comenzar
                   </>
                 )}
               </button>
@@ -519,6 +616,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
               </p>
             )}
           </div>
+          </>
+          )}
         </div>
 
         {/* Feature Badges */}
@@ -546,6 +645,19 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Direct Payment Modal */}
+      <DirectPaymentModal
+        isOpen={isDirectPaymentOpen}
+        onClose={() => setIsDirectPaymentOpen(false)}
+        bcvRate={bcvRate}
+        initialPlan={registeredPaidOrg?.plan || (planSuscripcion === 'premium' ? 'premium' : 'pro')}
+        defaultStoreName={registeredPaidOrg?.nombreNegocio || nombreNegocio}
+        defaultEmail={registeredPaidOrg?.email || email}
+        onPaymentReported={() => {
+          onShowToast('¡Reporte enviado! El Super Admin activará tu cuenta tras confirmar los fondos.', 'chat');
+        }}
+      />
     </div>
   );
 };

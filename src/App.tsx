@@ -579,6 +579,7 @@ export default function App() {
             onAuthSuccess={handleAuthSuccess}
             onNavigate={navigate}
             onShowToast={showToast}
+            bcvRate={settings.bcvExchangeRate}
           />
           <Toast message="Inicia sesión con la cuenta de Creador para acceder al Panel Maestro" icon="admin_panel_settings" />
         </>
@@ -593,6 +594,7 @@ export default function App() {
             onAuthSuccess={handleAuthSuccess}
             onNavigate={navigate}
             onShowToast={showToast}
+            bcvRate={settings.bcvExchangeRate}
           />
           <Toast message={toastMessage} icon={toastIcon} />
         </>

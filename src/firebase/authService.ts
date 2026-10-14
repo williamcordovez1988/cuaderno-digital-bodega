@@ -183,7 +183,7 @@ export async function registerBusiness({
       productsCount: 0
     };
 
-    syncOrganizationToMasterRegistry(organization);
+    await syncOrganizationToMasterRegistry(organization);
 
     // 3. Create user profile linked to the new organization with role 'dueno'
     const profile: UserProfile = {
@@ -246,7 +246,7 @@ export async function registerBusiness({
         ai_scans_used: 0,
         productsCount: 0
       };
-      syncOrganizationToMasterRegistry(organization);
+      await syncOrganizationToMasterRegistry(organization);
 
       const profile: UserProfile = {
         id: userId,
