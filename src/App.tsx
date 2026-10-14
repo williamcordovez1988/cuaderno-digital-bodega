@@ -34,6 +34,7 @@ import {
   subscribeToLedger,
   subscribeToSettings,
   subscribeToCollaborators,
+  subscribeToOrganization,
   saveProduct,
   deleteProduct,
   applyInvoiceArrivals,
@@ -245,6 +246,52 @@ export default function App() {
       unsubCollabs();
     };
   }, [currentUser, organization]);
+
+  // Real-time listener for current Organization document (unlocks features immediately upon Master Admin activation)
+  useEffect(() => {
+    if (!organization?.id) return;
+
+    const unsubOrg = subscribeToOrganization(organization.id, (updatedOrg) => {
+      setOrganization((prev) => {
+        if (!prev) return updatedOrg;
+
+        const prevStatus = prev.subscriptionStatus || prev.status;
+        const nextStatus = updatedOrg.subscriptionStatus || updatedOrg.status;
+        const prevPlan = (prev.plan || prev.plan_suscripcion || '').toLowerCase();
+        const nextPlan = (updatedOrg.plan || updatedOrg.plan_suscripcion || '').toLowerCase();
+
+        if (prevStatus !== nextStatus || prevPlan !== nextPlan) {
+          if (nextStatus === 'active' && prevStatus === 'pendiente_pago') {
+            setIsDirectPaymentOpen(false);
+            setIsPaywallOpen(false);
+            showToast(
+              `🎉 ¡Tu cuenta ha sido activada con éxito con el Plan ${(updatedOrg.plan || updatedOrg.plan_suscripcion || '').toUpperCase()}!`,
+              'celebration'
+            );
+          } else if (nextPlan !== prevPlan) {
+            showToast(
+              `⭐ Tu plan ha sido actualizado a ${(updatedOrg.plan || updatedOrg.plan_suscripcion || '').toUpperCase()}`,
+              'verified'
+            );
+          }
+        }
+        return { ...prev, ...updatedOrg };
+      });
+
+      // Update active stored session in local storage
+      const activeSession = getActiveStoredSession();
+      if (activeSession && activeSession.organization?.id === updatedOrg.id) {
+        saveActiveStoredSession({
+          ...activeSession,
+          organization: { ...activeSession.organization, ...updatedOrg }
+        });
+      }
+    });
+
+    return () => {
+      unsubOrg();
+    };
+  }, [organization?.id, showToast]);
 
   // Automatic Exchange Rate Scheduler (9:00 AM & 2:00 PM)
   useEffect(() => {

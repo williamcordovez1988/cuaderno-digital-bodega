@@ -2,18 +2,29 @@ export interface Organization {
   id: string;
   nombre_negocio: string;
   plan_suscripcion: 'trial' | 'prueba' | 'gratuito' | 'basico' | 'emprendedor' | 'pro' | 'premium' | string;
+  plan?: string;
+  status?: string;
   fecha_registro: string;
+  createdAt?: string;
+  updatedAt?: string;
   telefono?: string;
   direccion?: string;
   logoUrl?: string;
   ai_scans_used?: number;
   ownerEmail?: string;
   ownerName?: string;
+  ownerId?: string;
   subscriptionStatus?: 'active' | 'paused' | 'expired' | 'pendiente_pago';
   subscriptionExpiryDate?: string;
+  planExpiresAt?: string;
   productsCount?: number;
   paymentNotes?: string;
 }
+
+export const LEGACY_DUMMY_IDS = [
+  'org-bodega-san-jose',
+  'org-abasto-el-ahorro'
+];
 
 export const SUPER_ADMIN_EMAILS = [
   'williamcordovezcn@gmail.com',

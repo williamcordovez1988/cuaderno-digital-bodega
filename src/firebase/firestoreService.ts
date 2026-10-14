@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './config';
 import { handleFirestoreError, OperationType } from './errors';
-import { Product, Customer, Sale, LedgerEntry, BodegaSettings, UserProfile, isTrialPlan, Organization, OrganizationAdminRecord } from './types';
+import { Product, Customer, Sale, LedgerEntry, BodegaSettings, UserProfile, isTrialPlan, Organization, OrganizationAdminRecord, LEGACY_DUMMY_IDS } from './types';
 
 const PRODUCTS_COLLECTION = 'products';
 const CUSTOMERS_COLLECTION = 'customers';
@@ -1291,18 +1291,39 @@ export async function incrementOrgAiScansCount(orgId?: string | null): Promise<n
 
 export const SAAS_ORGANIZATIONS_REGISTRY_KEY = 'bodega_all_organizations_registry';
 
-// Purge identifiers of any previous dummy mock data
-const LEGACY_DUMMY_IDS = [
-  'org-bodega-san-jose',
-  'org-abasto-el-ahorro',
-  'org-minimarket-chacao',
-  'org-viveres-don-pedro',
-  'org-delicateses-teques'
-];
-
 export async function syncOrganizationToMasterRegistry(org: Partial<OrganizationAdminRecord>): Promise<void> {
   try {
     if (!org.id || LEGACY_DUMMY_IDS.includes(org.id)) return;
+
+    const rawPlan = (org.plan || org.plan_suscripcion || 'gratuito').toString().toLowerCase();
+    const planLower = rawPlan.includes('prem') ? 'premium' : rawPlan.includes('pro') ? 'pro' : 'gratuito';
+    const planCap = planLower === 'premium' ? 'Premium' : planLower === 'pro' ? 'Pro' : 'Gratis';
+    const rawStatus = (org.status || org.subscriptionStatus || 'active').toString().toLowerCase();
+    const statusNorm = rawStatus === 'pendiente_pago' ? 'pendiente_pago' : rawStatus === 'paused' ? 'paused' : rawStatus === 'expired' ? 'expired' : 'active';
+    const nowIso = org.fecha_registro || org.createdAt || new Date().toISOString();
+    const expiryIso = org.planExpiresAt || new Date(Date.now() + 30 * 86400000).toISOString();
+    const expiryDateStr = org.subscriptionExpiryDate || expiryIso.split('T')[0];
+
+    const normalizedRecord: OrganizationAdminRecord = {
+      id: org.id,
+      nombre_negocio: org.nombre_negocio || 'Nuevo Comercio',
+      ownerName: org.ownerName || 'Propietario',
+      ownerEmail: org.ownerEmail || '',
+      ownerPhone: org.ownerPhone || org.telefono || '',
+      plan_suscripcion: planLower,
+      plan: planCap,
+      status: statusNorm,
+      subscriptionStatus: statusNorm,
+      subscriptionExpiryDate: expiryDateStr,
+      planExpiresAt: expiryIso,
+      fecha_registro: nowIso,
+      createdAt: org.createdAt || nowIso,
+      updatedAt: org.updatedAt || nowIso,
+      productsCount: org.productsCount || 0,
+      ai_scans_used: org.ai_scans_used || 0,
+      paymentNotes: org.paymentNotes || ''
+    };
+
     const raw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
     let list: OrganizationAdminRecord[] = raw ? JSON.parse(raw) : [];
     // Ensure no dummy IDs exist
@@ -1310,28 +1331,15 @@ export async function syncOrganizationToMasterRegistry(org: Partial<Organization
 
     const idx = list.findIndex(item => item.id === org.id);
     if (idx >= 0) {
-      list[idx] = { ...list[idx], ...org };
+      list[idx] = { ...list[idx], ...normalizedRecord };
     } else {
-      list.unshift({
-        id: org.id,
-        nombre_negocio: org.nombre_negocio || 'Nuevo Comercio',
-        ownerName: org.ownerName || 'Propietario',
-        ownerEmail: org.ownerEmail || '',
-        ownerPhone: org.ownerPhone || org.telefono || '',
-        plan_suscripcion: org.plan_suscripcion || 'gratuito',
-        subscriptionStatus: org.subscriptionStatus || 'active',
-        subscriptionExpiryDate: org.subscriptionExpiryDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        fecha_registro: org.fecha_registro || new Date().toISOString(),
-        productsCount: org.productsCount || 0,
-        ai_scans_used: org.ai_scans_used || 0,
-        paymentNotes: org.paymentNotes || ''
-      });
+      list.unshift(normalizedRecord);
     }
     localStorage.setItem(SAAS_ORGANIZATIONS_REGISTRY_KEY, JSON.stringify(list));
 
     // Persist directly to Firestore organizations collection
     try {
-      await setDoc(doc(db, ORGANIZATIONS_COLLECTION, org.id), org, { merge: true });
+      await setDoc(doc(db, ORGANIZATIONS_COLLECTION, org.id), normalizedRecord, { merge: true });
     } catch (fsErr) {
       console.warn('Could not sync org directly to Firestore:', fsErr);
     }
@@ -1470,14 +1478,37 @@ export async function updateOrganizationPlanAndStatus(
   orgId: string,
   updates: Partial<OrganizationAdminRecord>
 ): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const rawPlan = (updates.plan || updates.plan_suscripcion || '').toString().toLowerCase();
+  const planCapitalized = rawPlan.includes('prem') ? 'Premium' : rawPlan.includes('pro') ? 'Pro' : rawPlan.includes('grat') ? 'Gratis' : (updates.plan || 'Pro');
+  const planLower = rawPlan.includes('prem') ? 'premium' : rawPlan.includes('pro') ? 'pro' : 'gratuito';
+
+  const rawStatus = (updates.status || updates.subscriptionStatus || 'active').toString().toLowerCase();
+  const statusNorm = rawStatus === 'pendiente_pago' ? 'pendiente_pago' : rawStatus === 'paused' ? 'paused' : rawStatus === 'expired' ? 'expired' : 'active';
+
+  const durationMs = 30 * 24 * 60 * 60 * 1000;
+  const planExpiresAt = updates.planExpiresAt || (updates.subscriptionExpiryDate ? new Date(updates.subscriptionExpiryDate + (updates.subscriptionExpiryDate.includes('T') ? '' : 'T23:59:59')).toISOString() : new Date(Date.now() + durationMs).toISOString());
+  const subscriptionExpiryDate = updates.subscriptionExpiryDate || planExpiresAt.split('T')[0];
+
+  const fullUpdates: Record<string, any> = {
+    ...updates,
+    plan: planCapitalized,
+    plan_suscripcion: planLower,
+    status: statusNorm,
+    subscriptionStatus: statusNorm,
+    updatedAt: nowIso,
+    planExpiresAt,
+    subscriptionExpiryDate
+  };
+
   // Update local registry
   const raw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
   let records: OrganizationAdminRecord[] = raw ? JSON.parse(raw) : [];
   const idx = records.findIndex(r => r.id === orgId);
   if (idx >= 0) {
-    records[idx] = { ...records[idx], ...updates };
+    records[idx] = { ...records[idx], ...fullUpdates };
   } else {
-    records.push({ id: orgId, ...updates } as OrganizationAdminRecord);
+    records.push({ id: orgId, ...fullUpdates } as OrganizationAdminRecord);
   }
   localStorage.setItem(SAAS_ORGANIZATIONS_REGISTRY_KEY, JSON.stringify(records));
 
@@ -1487,7 +1518,7 @@ export async function updateOrganizationPlanAndStatus(
     if (rawSession) {
       const session = JSON.parse(rawSession);
       if (session.organization && session.organization.id === orgId) {
-        session.organization = { ...session.organization, ...updates };
+        session.organization = { ...session.organization, ...fullUpdates };
         localStorage.setItem('bodega_active_session', JSON.stringify(session));
       }
     }
@@ -1495,11 +1526,107 @@ export async function updateOrganizationPlanAndStatus(
     console.warn('Failed to update active session:', e);
   }
 
-  // Persist directly to Firestore
+  // Persist directly to Firestore organizations collection (using updateDoc or setDoc merge)
   try {
-    await setDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), updates, { merge: true });
+    const orgDocRef = doc(db, ORGANIZATIONS_COLLECTION, orgId);
+    try {
+      await updateDoc(orgDocRef, fullUpdates);
+    } catch {
+      await setDoc(orgDocRef, fullUpdates, { merge: true });
+    }
   } catch (e) {
     console.warn('Failed to persist organization update to Firestore:', e);
+  }
+
+  // Update corresponding user documents in 'profiles' and 'users' collections
+  try {
+    const profSnap = await getDocs(query(collection(db, PROFILES_COLLECTION), where('organization_id', '==', orgId)));
+    for (const p of profSnap.docs) {
+      await setDoc(doc(db, PROFILES_COLLECTION, p.id), {
+        plan: planCapitalized,
+        plan_suscripcion: planLower,
+        status: statusNorm,
+        subscriptionStatus: statusNorm,
+        updatedAt: nowIso,
+        planExpiresAt,
+        subscriptionExpiryDate
+      }, { merge: true });
+    }
+  } catch (e) {
+    console.warn('Could not update profiles collection for org:', e);
+  }
+
+  try {
+    const userSnap = await getDocs(query(collection(db, 'users'), where('organization_id', '==', orgId)));
+    for (const u of userSnap.docs) {
+      await setDoc(doc(db, 'users', u.id), {
+        plan: planCapitalized,
+        plan_suscripcion: planLower,
+        status: statusNorm,
+        subscriptionStatus: statusNorm,
+        updatedAt: nowIso,
+        planExpiresAt,
+        subscriptionExpiryDate
+      }, { merge: true });
+    }
+  } catch (e) {
+    console.warn('Could not update users collection for org:', e);
+  }
+}
+
+/**
+ * Real-time listener for changes on an organization document
+ */
+export function subscribeToOrganization(
+  orgId: string,
+  callback: (org: Organization) => void
+): () => void {
+  if (!orgId) return () => {};
+
+  try {
+    const orgDocRef = doc(db, ORGANIZATIONS_COLLECTION, orgId);
+    const unsub = onSnapshot(
+      orgDocRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const rawPlan = (data.plan_suscripcion || data.plan || 'gratuito').toString().toLowerCase();
+          const planNorm = rawPlan.includes('prem') ? 'premium' : rawPlan.includes('pro') ? 'pro' : 'gratuito';
+          const planCap = planNorm === 'premium' ? 'Premium' : planNorm === 'pro' ? 'Pro' : 'Gratis';
+          const rawStatus = (data.status || data.subscriptionStatus || 'active').toString().toLowerCase();
+          const statusNorm = rawStatus === 'pendiente_pago' ? 'pendiente_pago' : rawStatus === 'paused' ? 'paused' : rawStatus === 'expired' ? 'expired' : 'active';
+
+          const org: Organization = {
+            id: docSnap.id,
+            nombre_negocio: data.nombre_negocio || data.name || '',
+            plan_suscripcion: planNorm,
+            plan: data.plan || planCap,
+            status: statusNorm,
+            subscriptionStatus: statusNorm,
+            subscriptionExpiryDate: data.subscriptionExpiryDate || data.planExpiresAt?.split('T')[0] || '',
+            planExpiresAt: data.planExpiresAt || data.subscriptionExpiryDate || '',
+            fecha_registro: data.fecha_registro || data.createdAt || '',
+            createdAt: data.createdAt || data.fecha_registro || '',
+            updatedAt: data.updatedAt || '',
+            telefono: data.telefono || data.phone || '',
+            ownerEmail: data.ownerEmail || data.email || '',
+            ownerName: data.ownerName || '',
+            ownerId: data.ownerId || '',
+            paymentNotes: data.paymentNotes || '',
+            ai_scans_used: typeof data.ai_scans_used === 'number' ? data.ai_scans_used : 0,
+            productsCount: typeof data.productsCount === 'number' ? data.productsCount : 0
+          };
+          callback(org);
+        }
+      },
+      (error) => {
+        console.warn('Realtime listener error in subscribeToOrganization:', error);
+      }
+    );
+    return unsub;
+  } catch (err) {
+    console.warn('Could not establish subscribeToOrganization listener:', err);
+    return () => {};
   }
 }
 

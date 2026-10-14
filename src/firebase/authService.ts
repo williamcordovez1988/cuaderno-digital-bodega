@@ -164,20 +164,31 @@ export async function registerBusiness({
 
     const isPaidPlan = planSuscripcion === 'pro' || planSuscripcion === 'premium';
     const subStatus: 'active' | 'pendiente_pago' = isPaidPlan ? 'pendiente_pago' : 'active';
+    const planDisplay = planSuscripcion === 'premium' ? 'Premium' : planSuscripcion === 'pro' ? 'Pro' : 'Gratis';
     const paymentNotes = isPaidPlan
       ? `Pendiente de Pago (${planSuscripcion.toUpperCase()}) por confirmar recepción vía Pago Móvil / Binance / Zinli`
       : 'Plan Gratuito Permanente';
+
+    const nowIso = new Date().toISOString();
+    const expiryIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const expiryDateStr = expiryIso.split('T')[0];
 
     const organization: Organization = {
       id: orgId,
       nombre_negocio: nombreNegocio.trim(),
       plan_suscripcion: planSuscripcion,
-      fecha_registro: new Date().toISOString(),
-      ownerEmail: user.email || email.trim(),
-      ownerName: nombreUsuario.trim(),
-      telefono: '',
+      plan: planDisplay,
+      status: subStatus,
       subscriptionStatus: subStatus,
-      subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      fecha_registro: nowIso,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      ownerEmail: user.email || cleanEmail,
+      ownerName: nombreUsuario.trim(),
+      ownerId: user.uid,
+      telefono: '',
+      planExpiresAt: expiryIso,
+      subscriptionExpiryDate: expiryDateStr,
       paymentNotes,
       ai_scans_used: 0,
       productsCount: 0
@@ -192,8 +203,28 @@ export async function registerBusiness({
       organization_id: orgId,
       rol: 'dueno',
       nombre: nombreUsuario.trim(),
-      email: user.email || email.trim(),
-      fecha_creacion: new Date().toISOString()
+      email: user.email || cleanEmail,
+      fecha_creacion: nowIso
+    };
+
+    const userDocData = {
+      uid: user.uid,
+      id: user.uid,
+      email: user.email || cleanEmail,
+      displayName: nombreUsuario.trim(),
+      nombre: nombreUsuario.trim(),
+      organization_id: orgId,
+      organizationId: orgId,
+      rol: 'dueno',
+      role: 'dueno',
+      plan: planDisplay,
+      plan_suscripcion: planSuscripcion,
+      status: subStatus,
+      subscriptionStatus: subStatus,
+      planExpiresAt: expiryIso,
+      subscriptionExpiryDate: expiryDateStr,
+      createdAt: nowIso,
+      updatedAt: nowIso
     };
 
     // 4. Create clean initial settings for the organization (blank canvas)
@@ -209,10 +240,11 @@ export async function registerBusiness({
       pagoMovilCI: ''
     };
 
-    // 5. Persist directly to Firestore
+    // 5. Persist directly to Firestore collections: organizations, profiles, users, settings
     try {
       await setDoc(doc(db, 'organizations', orgId), organization, { merge: true });
       await setDoc(doc(db, 'profiles', user.uid), profile, { merge: true });
+      await setDoc(doc(db, 'users', user.uid), userDocData, { merge: true });
       await setDoc(doc(db, 'settings', orgId), initialSettings, { merge: true });
     } catch (fsErr) {
       console.warn('Direct Firestore write error during registration:', fsErr);
@@ -228,20 +260,31 @@ export async function registerBusiness({
       const userId = `user-${Date.now()}`;
       const isPaidPlan = planSuscripcion === 'pro' || planSuscripcion === 'premium';
       const subStatus: 'active' | 'pendiente_pago' = isPaidPlan ? 'pendiente_pago' : 'active';
+      const planDisplay = planSuscripcion === 'premium' ? 'Premium' : planSuscripcion === 'pro' ? 'Pro' : 'Gratis';
       const paymentNotes = isPaidPlan
         ? `Pendiente de Pago (${planSuscripcion.toUpperCase()}) por confirmar recepción vía Pago Móvil / Binance / Zinli`
         : 'Plan Gratuito Permanente';
+
+      const nowIso = new Date().toISOString();
+      const expiryIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const expiryDateStr = expiryIso.split('T')[0];
 
       const organization: Organization = {
         id: orgId,
         nombre_negocio: nombreNegocio.trim(),
         plan_suscripcion: planSuscripcion,
-        fecha_registro: new Date().toISOString(),
-        ownerEmail: email.trim(),
-        ownerName: nombreUsuario.trim(),
-        telefono: '',
+        plan: planDisplay,
+        status: subStatus,
         subscriptionStatus: subStatus,
-        subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        fecha_registro: nowIso,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        ownerEmail: cleanEmail,
+        ownerName: nombreUsuario.trim(),
+        ownerId: userId,
+        telefono: '',
+        planExpiresAt: expiryIso,
+        subscriptionExpiryDate: expiryDateStr,
         paymentNotes,
         ai_scans_used: 0,
         productsCount: 0
@@ -254,8 +297,28 @@ export async function registerBusiness({
         organization_id: orgId,
         rol: 'dueno',
         nombre: nombreUsuario.trim(),
-        email: email.trim(),
-        fecha_creacion: new Date().toISOString()
+        email: cleanEmail,
+        fecha_creacion: nowIso
+      };
+
+      const userDocData = {
+        uid: userId,
+        id: userId,
+        email: cleanEmail,
+        displayName: nombreUsuario.trim(),
+        nombre: nombreUsuario.trim(),
+        organization_id: orgId,
+        organizationId: orgId,
+        rol: 'dueno',
+        role: 'dueno',
+        plan: planDisplay,
+        plan_suscripcion: planSuscripcion,
+        status: subStatus,
+        subscriptionStatus: subStatus,
+        planExpiresAt: expiryIso,
+        subscriptionExpiryDate: expiryDateStr,
+        createdAt: nowIso,
+        updatedAt: nowIso
       };
 
       const initialSettings: BodegaSettings = {
@@ -273,6 +336,7 @@ export async function registerBusiness({
       try {
         await setDoc(doc(db, 'organizations', orgId), organization, { merge: true });
         await setDoc(doc(db, 'profiles', userId), profile, { merge: true });
+        await setDoc(doc(db, 'users', userId), userDocData, { merge: true });
         await setDoc(doc(db, 'settings', orgId), initialSettings, { merge: true });
       } catch (fsErr) {
         console.warn('Fallback Firestore write error:', fsErr);
@@ -398,12 +462,31 @@ export async function fetchUserProfileAndOrg(
   userId: string
 ): Promise<{ profile: UserProfile; organization: Organization } | null> {
   try {
+    let profile: UserProfile | null = null;
     const profileSnap = await getDoc(doc(db, 'profiles', userId));
-    if (!profileSnap.exists()) {
+    if (profileSnap.exists()) {
+      profile = profileSnap.data() as UserProfile;
+    } else {
+      // Fallback to 'users' collection
+      const userSnap = await getDoc(doc(db, 'users', userId));
+      if (userSnap.exists()) {
+        const uData = userSnap.data();
+        profile = {
+          id: userId,
+          user_id: userId,
+          organization_id: uData.organization_id || uData.organizationId || '',
+          rol: uData.rol || uData.role || 'dueno',
+          nombre: uData.nombre || uData.displayName || '',
+          email: uData.email || '',
+          fecha_creacion: uData.createdAt || uData.fecha_creacion || new Date().toISOString()
+        };
+      }
+    }
+
+    if (!profile || !profile.organization_id) {
       return null;
     }
 
-    const profile = profileSnap.data() as UserProfile;
     const orgSnap = await getDoc(doc(db, 'organizations', profile.organization_id));
 
     let organization: Organization;
@@ -414,6 +497,9 @@ export async function fetchUserProfileAndOrg(
         id: profile.organization_id,
         nombre_negocio: 'Mi Bodega',
         plan_suscripcion: 'gratuito',
+        plan: 'Gratis',
+        status: 'active',
+        subscriptionStatus: 'active',
         fecha_registro: new Date().toISOString()
       };
     }
@@ -434,16 +520,25 @@ export async function createProfileForExistingUser(
 ): Promise<AuthSession> {
   const orgId = `org-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
   const bName = businessName?.trim() || `Bodega de ${user.displayName || 'Mi Negocio'}`;
+  const nowIso = new Date().toISOString();
+  const expiryIso = new Date(Date.now() + 30 * 86400000).toISOString();
+  const expiryDateStr = expiryIso.split('T')[0];
 
   const organization: Organization = {
     id: orgId,
     nombre_negocio: bName,
     plan_suscripcion: 'gratuito',
-    fecha_registro: new Date().toISOString(),
+    plan: 'Gratis',
+    status: 'active',
+    subscriptionStatus: 'active',
+    fecha_registro: nowIso,
+    createdAt: nowIso,
+    updatedAt: nowIso,
     ownerEmail: user.email || '',
     ownerName: user.displayName || 'Bodeguero',
-    subscriptionStatus: 'active',
-    subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+    ownerId: user.uid,
+    planExpiresAt: expiryIso,
+    subscriptionExpiryDate: expiryDateStr
   };
 
   syncOrganizationToMasterRegistry(organization);
@@ -455,7 +550,27 @@ export async function createProfileForExistingUser(
     rol: 'dueno',
     nombre: user.displayName || 'Bodeguero',
     email: user.email || '',
-    fecha_creacion: new Date().toISOString()
+    fecha_creacion: nowIso
+  };
+
+  const userDocData = {
+    uid: user.uid,
+    id: user.uid,
+    email: user.email || '',
+    displayName: user.displayName || 'Bodeguero',
+    nombre: user.displayName || 'Bodeguero',
+    organization_id: orgId,
+    organizationId: orgId,
+    rol: 'dueno',
+    role: 'dueno',
+    plan: 'Gratis',
+    plan_suscripcion: 'gratuito',
+    status: 'active',
+    subscriptionStatus: 'active',
+    planExpiresAt: expiryIso,
+    subscriptionExpiryDate: expiryDateStr,
+    createdAt: nowIso,
+    updatedAt: nowIso
   };
 
   const initialSettings: BodegaSettings = {
@@ -471,9 +586,10 @@ export async function createProfileForExistingUser(
   };
 
   try {
-    await setDoc(doc(db, 'organizations', orgId), organization);
-    await setDoc(doc(db, 'profiles', user.uid), profile);
-    await setDoc(doc(db, 'settings', orgId), initialSettings);
+    await setDoc(doc(db, 'organizations', orgId), organization, { merge: true });
+    await setDoc(doc(db, 'profiles', user.uid), profile, { merge: true });
+    await setDoc(doc(db, 'users', user.uid), userDocData, { merge: true });
+    await setDoc(doc(db, 'settings', orgId), initialSettings, { merge: true });
   } catch (e) {
     console.warn('Could not write new profile to Firestore:', e);
   }

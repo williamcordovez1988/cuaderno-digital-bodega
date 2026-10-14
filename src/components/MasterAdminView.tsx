@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrganizationAdminRecord, PLAN_PRICING } from '../firebase/types';
+import { OrganizationAdminRecord, PLAN_PRICING, LEGACY_DUMMY_IDS } from '../firebase/types';
 import {
   getAllOrganizationsForAdmin,
   updateOrganizationPlanAndStatus,
@@ -64,13 +64,46 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
     loadOrgs();
 
     try {
-      const unsub = onSnapshot(collection(db, 'organizations'), () => {
-        // Silently reload organizations when changes happen
-        getAllOrganizationsForAdmin().then((records) => {
-          setOrganizations(records);
-        }).catch((err) => {
-          console.warn('Realtime sync reload error:', err);
-        });
+      // Real-time snapshot listener on the 'organizations' collection for instant 1-second updates
+      const unsub = onSnapshot(collection(db, 'organizations'), (snapshot) => {
+        const realtimeList: OrganizationAdminRecord[] = snapshot.docs
+          .filter((d) => !LEGACY_DUMMY_IDS.includes(d.id))
+          .map((d) => {
+            const data = d.data();
+            const rawPlan = (data.plan_suscripcion || data.plan || 'gratuito').toString().toLowerCase();
+            const planNorm = rawPlan.includes('prem') ? 'premium' : rawPlan.includes('pro') ? 'pro' : 'gratuito';
+            const planCap = planNorm === 'premium' ? 'Premium' : planNorm === 'pro' ? 'Pro' : 'Gratis';
+            const rawStatus = (data.status || data.subscriptionStatus || 'active').toString().toLowerCase();
+            const statusNorm = rawStatus === 'pendiente_pago' ? 'pendiente_pago' : rawStatus === 'paused' ? 'paused' : rawStatus === 'expired' ? 'expired' : 'active';
+            const expiryIso = data.planExpiresAt || (data.subscriptionExpiryDate ? new Date(data.subscriptionExpiryDate + (data.subscriptionExpiryDate.includes('T') ? '' : 'T23:59:59')).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString());
+            const expiryDateStr = data.subscriptionExpiryDate || expiryIso.split('T')[0];
+
+            return {
+              id: d.id,
+              nombre_negocio: data.nombre_negocio || data.name || 'Comercio',
+              ownerName: data.ownerName || data.owner || 'Propietario',
+              ownerEmail: data.ownerEmail || data.email || '',
+              ownerPhone: data.ownerPhone || data.telefono || data.phone || '',
+              plan_suscripcion: planNorm,
+              plan: data.plan || planCap,
+              status: statusNorm,
+              subscriptionStatus: statusNorm,
+              subscriptionExpiryDate: expiryDateStr,
+              planExpiresAt: expiryIso,
+              fecha_registro: data.fecha_registro || data.createdAt || new Date().toISOString(),
+              createdAt: data.createdAt || data.fecha_registro || new Date().toISOString(),
+              updatedAt: data.updatedAt || '',
+              productsCount: typeof data.productsCount === 'number' ? data.productsCount : 0,
+              ai_scans_used: typeof data.ai_scans_used === 'number' ? data.ai_scans_used : 0,
+              logoUrl: data.logoUrl,
+              paymentNotes: data.paymentNotes || ''
+            };
+          });
+
+        if (realtimeList.length > 0) {
+          setOrganizations(realtimeList);
+          setIsLoading(false);
+        }
       });
       return () => unsub();
     } catch (e) {
@@ -85,15 +118,25 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
     durationDays: number = 30
   ) => {
     try {
-      const newExpiry = new Date(Date.now() + durationDays * 86400000).toISOString().split('T')[0];
+      const planCap = newPlanName === 'premium' ? 'Premium' : newPlanName === 'pro' ? 'Pro' : 'Gratis';
+      const durationMs = durationDays * 86400000;
+      const nowIso = new Date().toISOString();
+      const newPlanExpiresAt = new Date(Date.now() + durationMs).toISOString();
+      const newExpiry = newPlanExpiresAt.split('T')[0];
       const cycleLabel = durationDays === 365 ? 'ANUAL' : 'MENSUAL';
+
       const updates = {
+        plan: planCap,
         plan_suscripcion: newPlanName,
+        status: 'active' as const,
         subscriptionStatus: 'active' as const,
+        updatedAt: nowIso,
+        planExpiresAt: newPlanExpiresAt,
         subscriptionExpiryDate: newExpiry,
-        paymentNotes: `Plan ${newPlanName.toUpperCase()} (${cycleLabel}) activado por Super Admin el ${new Date().toLocaleDateString('es-VE')}`
+        paymentNotes: `Plan ${planCap} (${cycleLabel}) activado por Super Admin el ${new Date().toLocaleDateString('es-VE')}`
       };
 
+      // Direct Firestore updateDoc / setDoc write
       await updateOrganizationPlanAndStatus(org.id, updates);
 
       setOrganizations((prev) =>
@@ -101,7 +144,7 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
       );
 
       onShowToast(
-        `¡${org.nombre_negocio} actualizado a ${newPlanName.toUpperCase()} (${cycleLabel}) exitosamente!`,
+        `¡${org.nombre_negocio} activado con Plan ${planCap} (${cycleLabel}) exitosamente!`,
         'verified'
       );
     } catch (e) {
@@ -624,13 +667,15 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
                 </thead>
                 <tbody className="divide-y divide-[#f0ebe3]">
                   {filteredOrganizations.map((org) => {
-                    const isPro = org.plan_suscripcion === 'pro';
-                    const isPremium = org.plan_suscripcion === 'premium';
+                    const rawPlan = (org.plan_suscripcion || org.plan || 'gratuito').toString().toLowerCase();
+                    const isPro = rawPlan === 'pro';
+                    const isPremium = rawPlan === 'premium';
                     const isGratuito = !isPro && !isPremium;
-                    const isActive = org.subscriptionStatus === 'active';
-                    const isPaused = org.subscriptionStatus === 'paused';
-                    const isExpired = org.subscriptionStatus === 'expired';
-                    const isPendiente = org.subscriptionStatus === 'pendiente_pago';
+                    const rawStatus = (org.subscriptionStatus || org.status || 'active').toString().toLowerCase();
+                    const isActive = rawStatus === 'active';
+                    const isPaused = rawStatus === 'paused';
+                    const isExpired = rawStatus === 'expired';
+                    const isPendiente = rawStatus === 'pendiente_pago';
 
                     // Clean phone for WhatsApp link
                     const cleanPhone = (org.ownerPhone || org.telefono || '').replace(/[^0-9]/g, '');

@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   registerBusiness,
   loginWithEmail,
   loginWithGoogleMultiTenant,
+  saveActiveStoredSession,
   AuthSession
 } from '../firebase/authService';
+import { subscribeToOrganization } from '../firebase/firestoreService';
 import { DirectPaymentModal } from './DirectPaymentModal';
 
 interface AuthViewProps {
@@ -40,7 +42,35 @@ export const AuthView: React.FC<AuthViewProps> = ({
     nombreNegocio: string;
     email: string;
     plan: 'pro' | 'premium';
+    orgId?: string;
+    session?: AuthSession;
   } | null>(null);
+
+  // Real-time listener: automatically unlock when Super Admin activates the plan
+  useEffect(() => {
+    if (!registeredPaidOrg?.orgId) return;
+
+    const unsub = subscribeToOrganization(registeredPaidOrg.orgId, (updatedOrg) => {
+      const isNowActive = (updatedOrg.subscriptionStatus || updatedOrg.status) === 'active';
+      if (isNowActive) {
+        const activatedPlan = (updatedOrg.plan || updatedOrg.plan_suscripcion || registeredPaidOrg.plan).toUpperCase();
+        onShowToast(`🎉 ¡Plan ${activatedPlan} activado con éxito! Ingresando a tu negocio...`, 'celebration');
+        setIsDirectPaymentOpen(false);
+        const baseSession = registeredPaidOrg.session;
+        if (baseSession) {
+          const updatedSession: AuthSession = {
+            ...baseSession,
+            organization: updatedOrg
+          };
+          saveActiveStoredSession(updatedSession);
+          setRegisteredPaidOrg(null);
+          onAuthSuccess(updatedSession);
+        }
+      }
+    });
+
+    return () => unsub();
+  }, [registeredPaidOrg?.orgId, registeredPaidOrg?.session, registeredPaidOrg?.plan, onAuthSuccess, onShowToast]);
 
   const switchMode = (newMode: 'login' | 'register') => {
     setErrorMessage(null);
@@ -113,7 +143,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
         setRegisteredPaidOrg({
           nombreNegocio: session.organization.nombre_negocio,
           email: session.organization.ownerEmail || email.trim(),
-          plan: planSuscripcion
+          plan: planSuscripcion,
+          orgId: session.organization.id,
+          session
         });
         setIsDirectPaymentOpen(true);
         onShowToast(`¡Bodega registrada! Por favor completa tu pago para activar tu cuenta.`, 'payments');
@@ -141,12 +173,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setLoading(true);
     try {
       const session = await loginWithEmail(email, password);
-      if (session.organization?.subscriptionStatus === 'pendiente_pago') {
+      if (session.organization?.subscriptionStatus === 'pendiente_pago' || session.organization?.status === 'pendiente_pago') {
         // Enforce mandatory payment: block dashboard access and open payment modal
         setRegisteredPaidOrg({
           nombreNegocio: session.organization.nombre_negocio,
           email: session.organization.ownerEmail || email.trim(),
-          plan: (session.organization.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro'
+          plan: (session.organization.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro',
+          orgId: session.organization.id,
+          session
         });
         setIsDirectPaymentOpen(true);
         onShowToast('Tu cuenta aún está Pendiente de Activación por el Super Admin.', 'payments');
@@ -255,6 +289,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 <p className="text-[11px] text-[#554336] leading-relaxed">
                   Por políticas de seguridad, el acceso al panel contable para planes Pro y Premium requiere confirmar tu pago vía Pago Móvil, Binance Pay o Zinli.
                 </p>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 py-2 px-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-[11px] font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>Sincronización en vivo activa: Tu pantalla se desbloqueará en el mismo segundo en que se active tu plan</span>
               </div>
 
               <button
