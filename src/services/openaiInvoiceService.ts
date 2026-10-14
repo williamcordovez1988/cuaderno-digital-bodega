@@ -1,13 +1,13 @@
 /**
  * Servicio de Lectura Inteligente de Facturas con IA utilizando OpenAI (gpt-4o-mini)
  * Endpoint: https://api.openai.com/v1/chat/completions
- * Utiliza import.meta.env.VITE_OPENAI_API_KEY
- * Modo response_format: { type: "json_object" }
+ * Modelo: gpt-4o-mini
+ * Formato: response_format: { type: "json_object" }
  */
 
 export interface ProcessInvoiceInput {
   text?: string;
-  dataUrl?: string; // e.g. "data:image/jpeg;base64,..."
+  dataUrl?: string; // base64 data URL e.g. "data:image/jpeg;base64,..."
   imageBase64?: string;
   mimeType?: string;
   exchangeRate: number;
@@ -46,249 +46,112 @@ export interface ParsedOpenAIInvoice {
   totalInvoiceAmountBs?: number;
   items: ParsedOpenAIItem[];
   notes?: string;
-  source?: 'openai' | 'fallback';
+  source?: 'openai' | 'proxy' | 'fallback';
   fallback?: boolean;
 }
 
 /**
- * Generador inteligente de contingencia cuando OpenAI no está accesible o se agotan cuotas
+ * Obtiene la API Key de OpenAI desde import.meta.env o localStorage
  */
-export function generateSmartFallback(payload: ProcessInvoiceInput): ParsedOpenAIInvoice {
-  const rate = payload.exchangeRate || 877.90;
-  const rawText = (payload.text || '').toLowerCase();
-
-  // 1. PepsiCo Venezuela
-  if (
-    rawText.includes('pepsi') ||
-    rawText.includes('gatorade') ||
-    rawText.includes('dorito') ||
-    rawText.includes('ruffle') ||
-    rawText.includes('7up')
-  ) {
-    const supplier = 'Empresas PepsiCo Venezuela';
-    const items: ParsedOpenAIItem[] = [
-      {
-        productName: 'Pepsi Cola Sabor Clásico 2 Litros',
-        productCode: 'PEP-002',
-        quantity: 24,
-        unit: 'bot.',
-        costUSD: 1.65,
-        costBs: Number((1.65 * rate).toFixed(2)),
-        suggestedPriceUSD: Number((1.65 * 1.3).toFixed(2)),
-        suggestedPriceBs: Number((1.65 * 1.3 * rate).toFixed(2)),
-        marginPercent: 30,
-        category: 'Bebidas y Refrescos',
-        isNewProduct: !payload.catalog.some((c) => c.name.toLowerCase().includes('pepsi'))
-      },
-      {
-        productName: 'Refresco 7Up Lima Limón 1.5L',
-        productCode: '7UP-015',
-        quantity: 18,
-        unit: 'bot.',
-        costUSD: 1.4,
-        costBs: Number((1.4 * rate).toFixed(2)),
-        suggestedPriceUSD: Number((1.4 * 1.3).toFixed(2)),
-        suggestedPriceBs: Number((1.4 * 1.3 * rate).toFixed(2)),
-        marginPercent: 30,
-        category: 'Bebidas y Refrescos',
-        isNewProduct: !payload.catalog.some((c) => c.name.toLowerCase().includes('7up'))
-      },
-      {
-        productName: 'Snack Doritos Mega Queso 145g',
-        productCode: 'DOR-145',
-        quantity: 20,
-        unit: 'paq.',
-        costUSD: 1.25,
-        costBs: Number((1.25 * rate).toFixed(2)),
-        suggestedPriceUSD: Number((1.25 * 1.3).toFixed(2)),
-        suggestedPriceBs: Number((1.25 * 1.3 * rate).toFixed(2)),
-        marginPercent: 30,
-        category: 'Víveres Secos',
-        isNewProduct: !payload.catalog.some((c) => c.name.toLowerCase().includes('dorito'))
-      },
-      {
-        productName: 'Papas Fritas Ruffles de Queso 130g',
-        productCode: 'RUF-130',
-        quantity: 15,
-        unit: 'paq.',
-        costUSD: 1.3,
-        costBs: Number((1.3 * rate).toFixed(2)),
-        suggestedPriceUSD: Number((1.3 * 1.3).toFixed(2)),
-        suggestedPriceBs: Number((1.3 * 1.3 * rate).toFixed(2)),
-        marginPercent: 30,
-        category: 'Víveres Secos',
-        isNewProduct: !payload.catalog.some((c) => c.name.toLowerCase().includes('ruffle'))
-      }
-    ];
-
-    const totalUSD = Number(items.reduce((acc, i) => acc + i.quantity * i.costUSD, 0).toFixed(2));
-    return {
-      supplier,
-      invoiceNumber: 'FAC-PEP-88310',
-      date: new Date().toLocaleDateString('es-VE'),
-      totalInvoiceAmountUSD: totalUSD,
-      totalInvoiceAmountBs: Number((totalUSD * rate).toFixed(2)),
-      items,
-      notes: 'Factura procesada (Proveedor: PepsiCo Venezuela). Precios sugeridos con 30% de margen.',
-      source: 'fallback',
-      fallback: false
-    };
+export function getOpenAIApiKey(): string {
+  const envKey = (import.meta.env.VITE_OPENAI_API_KEY || '').trim();
+  if (envKey && envKey !== 'tu_clave_de_openai_aqui' && !envKey.startsWith('MY_')) {
+    return envKey;
   }
-
-  // 2. Empresas Polar & Distribución Mayorista
-  const isDistribuidora = rawText.includes('distribuidora') || rawText.includes('central');
-  const supplier = isDistribuidora ? 'Distribuidora Central de Víveres' : 'Empresas Polar C.A.';
-  const items: ParsedOpenAIItem[] = [
-    {
-      productName: 'Harina PAN Blanca 1kg',
-      productCode: 'PAN-001',
-      quantity: 40,
-      unit: 'paq.',
-      costUSD: 0.98,
-      costBs: Number((0.98 * rate).toFixed(2)),
-      suggestedPriceUSD: Number((0.98 * 1.3).toFixed(2)),
-      suggestedPriceBs: Number((0.98 * 1.3 * rate).toFixed(2)),
-      marginPercent: 30,
-      category: 'Víveres Secos',
-      isNewProduct: !payload.catalog.some((c) => c.name.toLowerCase().includes('harina pan'))
-    },
-    {
-      productName: 'Arroz Mary Tradicional 1kg',
-      productCode: 'ARR-014',
-      quantity: 24,
-      unit: 'paq.',
-      costUSD: 1.12,
-      costBs: Number((1.12 * rate).toFixed(2)),
-      suggestedPriceUSD: Number((1.12 * 1.3).toFixed(2)),
-      suggestedPriceBs: Number((1.12 * 1.3 * rate).toFixed(2)),
-      marginPercent: 30,
-      category: 'Víveres Secos',
-      isNewProduct: !payload.catalog.some((c) => c.name.toLowerCase().includes('arroz mary'))
-    },
-    {
-      productName: 'Margarina Mavesa con Sal 500g',
-      productCode: 'MAV-500',
-      quantity: 20,
-      unit: 'tarr.',
-      costUSD: 1.75,
-      costBs: Number((1.75 * rate).toFixed(2)),
-      suggestedPriceUSD: Number((1.75 * 1.3).toFixed(2)),
-      suggestedPriceBs: Number((1.75 * 1.3 * rate).toFixed(2)),
-      marginPercent: 30,
-      category: 'Lácteos y Charcutería',
-      isNewProduct: !payload.catalog.some((c) => c.name.toLowerCase().includes('mavesa'))
-    },
-    {
-      productName: 'Bebida de Malta Maltín Polar 250ml',
-      productCode: 'MAL-250',
-      quantity: 48,
-      unit: 'bot.',
-      costUSD: 0.62,
-      costBs: Number((0.62 * rate).toFixed(2)),
-      suggestedPriceUSD: Number((0.62 * 1.3).toFixed(2)),
-      suggestedPriceBs: Number((0.62 * 1.3 * rate).toFixed(2)),
-      marginPercent: 30,
-      category: 'Bebidas y Refrescos',
-      isNewProduct: !payload.catalog.some((c) => c.name.toLowerCase().includes('maltin'))
-    }
-  ];
-
-  // Try matching with catalog
-  items.forEach((item) => {
-    const match = payload.catalog.find((c) => c.name.toLowerCase() === item.productName.toLowerCase());
-    if (match) {
-      item.productId = match.id;
-      item.productCode = match.code;
-      item.isNewProduct = false;
-    }
-  });
-
-  const totalUSD = Number(items.reduce((acc, i) => acc + i.quantity * i.costUSD, 0).toFixed(2));
-  return {
-    supplier,
-    invoiceNumber: 'FAC-POL-99412',
-    date: new Date().toLocaleDateString('es-VE'),
-    totalInvoiceAmountUSD: totalUSD,
-    totalInvoiceAmountBs: Number((totalUSD * rate).toFixed(2)),
-    items,
-    notes: `Factura procesada (${supplier}). Precios de costo y venta calculados con tasa BCV ${rate.toFixed(2)} Bs/$ y margen 30%.`,
-    source: 'fallback',
-    fallback: false
-  };
+  const localKey = (
+    localStorage.getItem('bodega_openai_api_key') ||
+    localStorage.getItem('VITE_OPENAI_API_KEY') ||
+    ''
+  ).trim();
+  if (localKey) {
+    return localKey;
+  }
+  return '';
 }
 
 /**
- * Envía la factura a OpenAI (gpt-4o-mini) con response_format: { type: "json_object" }
+ * Guarda una API Key de OpenAI en localStorage para persistencia en el navegador
+ */
+export function setStoredOpenAIApiKey(key: string): void {
+  localStorage.setItem('bodega_openai_api_key', key.trim());
+}
+
+/**
+ * Procesa la factura enviando la imagen real a OpenAI gpt-4o-mini con response_format json_object.
+ * NO utiliza datos mock predeterminados de Polar.
  */
 export async function processInvoiceWithOpenAI(
   payload: ProcessInvoiceInput
 ): Promise<ParsedOpenAIInvoice> {
-  const apiKey = (import.meta.env.VITE_OPENAI_API_KEY || '').trim();
+  const apiKey = getOpenAIApiKey();
   const rate = payload.exchangeRate || 877.90;
 
   if (!apiKey) {
-    console.warn('[OpenAI gpt-4o-mini] Variable VITE_OPENAI_API_KEY no configurada. Usando procesador de contingencia.');
-    return generateSmartFallback(payload);
+    throw new Error(
+      'No se encontró la clave VITE_OPENAI_API_KEY. Por favor ingresa tu API Key de OpenAI en la barra superior del modal o configúrala en Vercel.'
+    );
+  }
+
+  // Preparar imagen Base64
+  let imageUrl: string | undefined = undefined;
+  if (payload.dataUrl && payload.dataUrl.startsWith('data:image/')) {
+    imageUrl = payload.dataUrl;
+  } else if (payload.dataUrl && payload.dataUrl.startsWith('data:application/octet-stream')) {
+    imageUrl = payload.dataUrl.replace('data:application/octet-stream', 'data:image/jpeg');
+  } else if (payload.imageBase64) {
+    const mime = payload.mimeType || 'image/jpeg';
+    imageUrl = `data:${mime};base64,${payload.imageBase64}`;
+  }
+
+  if (!imageUrl && (!payload.text || !payload.text.trim())) {
+    throw new Error('No se detectó ninguna imagen ni texto de factura para enviar a la IA.');
   }
 
   const catalogSummary = payload.catalog
     .slice(0, 40)
-    .map((c) => `- [${c.code}] ${c.name} (Costo actual: $${c.costUSD}, Precio actual: $${c.priceUSD}, Unidad: ${c.unit})`)
+    .map((c) => `- [${c.code}] ${c.name} (Costo: $${c.costUSD}, Precio: $${c.priceUSD}, Unidad: ${c.unit})`)
     .join('\n');
 
-  const systemInstructions = `Eres un asistente de visión artificial y contabilidad experto para bodegas, abastos y minimarkets en Venezuela ("Cuaderno Digital").
-Tu misión es analizar la imagen o texto de la factura de compra o nota de entrega de mercancía de un proveedor mayorista (ej: Empresas Polar, PepsiCo Venezuela, Alimentos Mary, Cargill, Monaca, Mayoristas locales, etc.).
+  const systemInstructions = `Eres un asistente de visión artificial y contabilidad experto para bodegas y minimarkets en Venezuela ("Cuaderno Digital").
+Tu misión es analizar la imagen de la factura o nota de entrega del proveedor y extraer en formato JSON estricto todos los productos, cantidades y costos unitarios reales.
 
-Tasa de cambio BCV oficial de referencia: ${rate} Bs/USD.
+Tasa oficial BCV de referencia: ${rate} Bs/USD.
 
-Instrucciones exactas de extracción:
-1. Extrae el nombre del Proveedor o Distribuidora ("supplier") (ej: Empresas Polar, PepsiCo Venezuela, Distribuidora Central, etc.).
-2. Extrae el número de factura o nota de entrega ("invoiceNumber") si aparece.
-3. Extrae la fecha del comprobante ("date").
-4. Extrae la lista completa de productos comprados ("items"). Para cada producto:
-   - "productName": Nombre comercial claro del producto (ej: Harina PAN Blanca 1kg, Arroz Mary Tradicional 1kg, Pepsi Cola 2L).
-   - "quantity": Cantidad de unidades compradas / recibidas a sumar al inventario (número).
-   - "costUSD": Costo unitario de compra en USD ($). Si la factura viene expresada en Bolívares (Bs), conviértelo a USD dividiendo el monto en Bs entre la tasa cambiaria ${rate} Bs/USD. Si ya viene en USD, coloca el costo directo.
-   - "unit": Unidad de empaque (paq., bot., lata, und., kg, etc.).
-   - "category": Categoría sugerida (Víveres Secos, Lácteos y Charcutería, Bebidas y Refrescos, Limpieza y Aseo, etc.).
-5. Extrae el monto total de la factura en USD ("totalInvoiceAmountUSD"). Si está en Bs, calcula totalUSD = totalBs / ${rate}.
-6. Notas breves u observaciones del despacho ("notes").
-
-Debes responder OBLIGATORIAMENTE con un único objeto JSON que contenga los campos:
+Estructura OBLIGATORIA de la respuesta en formato JSON:
 {
-  "supplier": string,
-  "invoiceNumber": string,
-  "date": string,
-  "totalInvoiceAmountUSD": number,
-  "notes": string,
+  "supplier": "Nombre de la distribuidora o proveedor que emite la factura",
+  "invoiceNumber": "Número de factura o nota de entrega",
+  "date": "Fecha de la factura",
+  "totalInvoiceAmountUSD": 0.0,
+  "notes": "Notas del despacho",
   "items": [
     {
-      "productName": string,
-      "quantity": number,
-      "costUSD": number,
-      "unit": string,
-      "category": string
+      "productName": "Nombre comercial real del producto",
+      "quantity": 1,
+      "costUSD": 0.0,
+      "unit": "paq./bot./lata/und./kg",
+      "category": "Víveres Secos / Bebidas y Refrescos / Lácteos y Charcutería / Limpieza y Aseo"
     }
   ]
-}`;
+}
 
-  // Build user content array supporting OpenAI Vision
-  const contentParts: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [];
+Reglas estrictas de extracción:
+1. Extrae los productos REALES que aparecen visualmente en la imagen de la factura.
+2. Si el costo unitario está en Bolívares (Bs), conviértelo a USD dividiendo entre la tasa cambiaria ${rate} Bs/USD.
+3. Si el costo unitario ya está en USD, usa el valor numérico en USD.
+4. "quantity" debe ser la cantidad de unidades compradas / recibidas a ingresar al stock.
+5. "costUSD" debe ser el costo unitario neto de compra por unidad.`;
 
-  // Determine Image URL
-  let imageUrl: string | undefined = undefined;
-  if (payload.dataUrl && payload.dataUrl.startsWith('data:image/')) {
-    imageUrl = payload.dataUrl;
-  } else if (payload.imageBase64 && payload.mimeType && payload.mimeType.startsWith('image/')) {
-    imageUrl = `data:${payload.mimeType};base64,${payload.imageBase64}`;
-  }
+  // Construir contenido para OpenAI Vision
+  const userContent: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [
+    {
+      type: 'text',
+      text: 'Analiza la imagen de esta factura de proveedor comercial con visión artificial y extrae la lista completa de productos reales, cantidades y costos unitarios en formato JSON estricto.'
+    }
+  ];
 
   if (imageUrl) {
-    contentParts.push({
-      type: 'text',
-      text: 'A continuación está la imagen de la factura del proveedor. Analízala visualmente con OCR y extrae los productos, cantidades y costos unitarios en formato JSON.'
-    });
-    contentParts.push({
+    userContent.push({
       type: 'image_url',
       image_url: {
         url: imageUrl,
@@ -298,18 +161,22 @@ Debes responder OBLIGATORIAMENTE con un único objeto JSON que contenga los camp
   }
 
   if (payload.text && payload.text.trim()) {
-    contentParts.push({
+    userContent.push({
       type: 'text',
-      text: `Texto o transcripción de la factura:\n${payload.text.trim()}`
+      text: `Transcripción o texto adicional:\n${payload.text.trim()}`
     });
   }
 
   if (payload.catalog.length > 0) {
-    contentParts.push({
+    userContent.push({
       type: 'text',
-      text: `Catálogo de productos existentes en la bodega para asociar códigos:\n${catalogSummary}`
+      text: `Catálogo existente en la bodega:\n${catalogSummary}`
     });
   }
+
+  // 1. Intentar llamada directa a la API de OpenAI
+  let rawJsonResult: any = null;
+  let source: 'openai' | 'proxy' = 'openai';
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -328,79 +195,139 @@ Debes responder OBLIGATORIAMENTE con un único objeto JSON que contenga los camp
           },
           {
             role: 'user',
-            content: contentParts
+            content: userContent
           }
         ],
         temperature: 0.2
       })
     });
 
-    if (!response.ok) {
+    if (response.ok) {
+      const jsonResponse = await response.json();
+      const content = jsonResponse.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error('La respuesta de OpenAI no contuvo información de texto.');
+      }
+      rawJsonResult = JSON.parse(content.trim());
+      source = 'openai';
+    } else {
       const errText = await response.text();
-      console.warn(`[OpenAI gpt-4o-mini] HTTP ${response.status}: ${errText}. Activando contingencia.`);
-      return generateSmartFallback(payload);
+      let parsedErr: any = null;
+      try {
+        parsedErr = JSON.parse(errText);
+      } catch {
+        // Not json
+      }
+
+      const isGeoBlocked =
+        response.status === 403 &&
+        (errText.includes('unsupported_country') || parsedErr?.error?.code === 'unsupported_country_region_territory');
+
+      // Si fue bloqueado por región (Venezuela) o hubo error de red, intentar vía endpoint del servidor / proxy Vercel
+      if (isGeoBlocked || response.status === 403 || response.status >= 500) {
+        console.warn(`[OpenAI Direct] Código ${response.status}. Intentando vía endpoint servidor /api/parse-invoice...`);
+        try {
+          const proxyRes = await fetch('/api/parse-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...payload,
+              apiKey
+            })
+          });
+
+          if (proxyRes.ok) {
+            const proxyData = await proxyRes.json();
+            if (proxyData && proxyData.items && proxyData.items.length > 0) {
+              return proxyData;
+            }
+          }
+        } catch {
+          // Continuar con el error real
+        }
+      }
+
+      // Mostrar el error real de OpenAI sin taparlo con datos mock
+      const finalMsg = parsedErr?.error?.message || errText || `Error HTTP ${response.status} en OpenAI API`;
+      throw new Error(`OpenAI API (${response.status}): ${finalMsg}`);
     }
+  } catch (error: any) {
+    // Si la llamada directa falló por CORS o red, intentar vía endpoint de servidor
+    if (!rawJsonResult) {
+      try {
+        const proxyRes = await fetch('/api/parse-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...payload,
+            apiKey
+          })
+        });
 
-    const jsonResponse = await response.json();
-    const rawContent = jsonResponse.choices?.[0]?.message?.content;
-
-    if (!rawContent) {
-      console.warn('[OpenAI gpt-4o-mini] Contenido vacío devuelto por el modelo.');
-      return generateSmartFallback(payload);
+        if (proxyRes.ok) {
+          const proxyData = await proxyRes.json();
+          if (proxyData && proxyData.items && proxyData.items.length > 0) {
+            return proxyData;
+          }
+        }
+      } catch {
+        // Fallback al error original
+      }
+      throw error;
     }
+  }
 
-    const parsed = JSON.parse(rawContent.trim());
+  // Mapear y validar la lista de productos devuelta por OpenAI
+  const rawItems: any[] = Array.isArray(rawJsonResult?.items) ? rawJsonResult.items : [];
+  if (rawItems.length === 0) {
+    throw new Error('OpenAI procesó la imagen pero no detectó productos legibles. Asegúrate de que la foto de la factura sea clara y nítida.');
+  }
 
-    const rawItems: any[] = Array.isArray(parsed.items) ? parsed.items : [];
-    const items: ParsedOpenAIItem[] = rawItems.map((raw: any) => {
-      const productName = String(raw.productName || 'Producto').trim();
-      const quantity = Math.max(1, Number(raw.quantity) || 1);
-      const costUSD = Math.max(0.01, Number(raw.costUSD) || 1.0);
-      const costBs = Number((costUSD * rate).toFixed(2));
-      const margin = 30; // 30% default margin
-      const suggestedUSD = Number((costUSD * 1.3).toFixed(2));
-      const suggestedBs = Number((suggestedUSD * rate).toFixed(2));
+  const items: ParsedOpenAIItem[] = rawItems.map((raw: any) => {
+    const productName = String(raw.productName || 'Producto detectado').trim();
+    const quantity = Math.max(1, Number(raw.quantity) || 1);
+    const costUSD = Math.max(0.01, Number(raw.costUSD) || 1.0);
+    const costBs = Number((costUSD * rate).toFixed(2));
+    const margin = 30; // 30% margen estándar sugerido
+    const suggestedUSD = Number((costUSD * 1.3).toFixed(2));
+    const suggestedBs = Number((suggestedUSD * rate).toFixed(2));
 
-      // Match against existing catalog
-      const matched = payload.catalog.find(
-        (c) =>
-          c.name.toLowerCase().trim() === productName.toLowerCase().trim() ||
-          (raw.productCode && c.code.toLowerCase() === String(raw.productCode).toLowerCase())
-      );
-
-      return {
-        productId: matched?.id,
-        productName,
-        productCode: matched?.code || raw.productCode,
-        quantity,
-        unit: raw.unit || matched?.unit || 'und.',
-        costUSD,
-        costBs,
-        suggestedPriceUSD: suggestedUSD,
-        suggestedPriceBs: suggestedBs,
-        marginPercent: margin,
-        category: matched?.category || raw.category || 'Víveres Secos',
-        isNewProduct: !matched
-      };
-    });
-
-    const totalUSD =
-      Number(parsed.totalInvoiceAmountUSD) ||
-      Number(items.reduce((acc, i) => acc + i.quantity * i.costUSD, 0).toFixed(2));
+    // Emparejar con el catálogo real del negocio
+    const matched = payload.catalog.find(
+      (c) =>
+        c.name.toLowerCase().trim() === productName.toLowerCase().trim() ||
+        (raw.productCode && c.code.toLowerCase() === String(raw.productCode).toLowerCase())
+    );
 
     return {
-      supplier: parsed.supplier || 'Proveedor Mayorista',
-      invoiceNumber: parsed.invoiceNumber || undefined,
-      date: parsed.date || new Date().toLocaleDateString('es-VE'),
-      totalInvoiceAmountUSD: totalUSD,
-      totalInvoiceAmountBs: Number((totalUSD * rate).toFixed(2)),
-      items,
-      notes: parsed.notes || 'Factura procesada con éxito mediante OpenAI gpt-4o-mini.',
-      source: 'openai',
-      fallback: false
+      productId: matched?.id,
+      productName,
+      productCode: matched?.code || raw.productCode,
+      quantity,
+      unit: raw.unit || matched?.unit || 'und.',
+      costUSD,
+      costBs,
+      suggestedPriceUSD: suggestedUSD,
+      suggestedPriceBs: suggestedBs,
+      marginPercent: margin,
+      category: matched?.category || raw.category || 'Víveres Secos',
+      isNewProduct: !matched
     };
-  } catch (error) {
-    console.error('[OpenAI gpt-4o-mini] Excepción al procesar factura:', error);
-    return generateSmartFallback(payload);
-  }
+  });
+
+  const totalUSD =
+    Number(rawJsonResult.totalInvoiceAmountUSD) ||
+    Number(items.reduce((acc, i) => acc + i.quantity * i.costUSD, 0).toFixed(2));
+
+  return {
+    supplier: rawJsonResult.supplier || 'Proveedor Detectado',
+    invoiceNumber: rawJsonResult.invoiceNumber || undefined,
+    date: rawJsonResult.date || new Date().toLocaleDateString('es-VE'),
+    totalInvoiceAmountUSD: totalUSD,
+    totalInvoiceAmountBs: Number((totalUSD * rate).toFixed(2)),
+    items,
+    notes: rawJsonResult.notes || 'Factura extraída con OpenAI gpt-4o-mini.',
+    source,
+    fallback: false
+  };
 }

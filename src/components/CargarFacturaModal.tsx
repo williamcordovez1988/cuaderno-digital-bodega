@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Product, InvoiceItem, InvoiceData, isTrialPlan } from '../firebase/types';
 import { getOrgAiScansCount, incrementOrgAiScansCount } from '../firebase/firestoreService';
-import { processInvoiceWithOpenAI } from '../services/openaiInvoiceService';
+import {
+  processInvoiceWithOpenAI,
+  getOpenAIApiKey,
+  setStoredOpenAIApiKey
+} from '../services/openaiInvoiceService';
 
 interface CargarFacturaModalProps {
   isOpen: boolean;
@@ -59,6 +63,8 @@ export const CargarFacturaModal: React.FC<CargarFacturaModalProps> = ({
   const [supplierName, setSupplierName] = useState('');
   const [itemsToApply, setItemsToApply] = useState<EditableInvoiceItem[]>([]);
   const [globalMargin, setGlobalMargin] = useState<number>(30);
+  const [apiKeyInput, setApiKeyInput] = useState<string>('');
+  const [showApiKeySettings, setShowApiKeySettings] = useState<boolean>(false);
 
   // Hidden File Inputs
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -187,12 +193,19 @@ TOTAL RECIBIDO: $213.60 USD`);
       return;
     }
 
+    const currentApiKey = getOpenAIApiKey();
+    if (!currentApiKey) {
+      setShowApiKeySettings(true);
+      onShowToast('Por favor ingresa tu clave de OpenAI (VITE_OPENAI_API_KEY) para procesar la factura', 'vpn_key');
+      return;
+    }
+
     if (activeTab === 'text' && !invoiceText.trim()) {
       onShowToast('Por favor escribe o pega el texto de la factura de compra', 'warning');
       return;
     }
 
-    if (activeTab === 'camera_file' && !filePreview) {
+    if (activeTab === 'camera_file' && !filePreview && !selectedFile) {
       onShowToast('Toma una foto con la cámara o sube un archivo (imagen o PDF)', 'warning');
       return;
     }
@@ -201,18 +214,32 @@ TOTAL RECIBIDO: $213.60 USD`);
     try {
       let imageBase64: string | undefined = undefined;
       let mimeType: string | undefined = undefined;
+      let currentDataUrl: string | undefined = filePreview || undefined;
 
-      if (filePreview) {
-        const parts = filePreview.split(',');
-        if (parts.length === 2) {
-          imageBase64 = parts[1];
-          mimeType = fileMimeType || (isPdf ? 'application/pdf' : 'image/jpeg');
+      // Si tenemos selectedFile pero filePreview aún no terminó de cargar
+      if (selectedFile) {
+        if (!currentDataUrl) {
+          currentDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(selectedFile);
+          });
         }
+        if (currentDataUrl && currentDataUrl.includes(',')) {
+          const parts = currentDataUrl.split(',');
+          imageBase64 = parts[1];
+          mimeType = selectedFile.type || fileMimeType || 'image/jpeg';
+        }
+      } else if (filePreview && filePreview.includes(',')) {
+        const parts = filePreview.split(',');
+        imageBase64 = parts[1];
+        mimeType = fileMimeType || (isPdf ? 'application/pdf' : 'image/jpeg');
       }
 
       const payload = {
         text: invoiceText.trim() || undefined,
-        dataUrl: filePreview || undefined,
+        dataUrl: currentDataUrl,
         imageBase64,
         mimeType,
         exchangeRate,
@@ -274,14 +301,14 @@ TOTAL RECIBIDO: $213.60 USD`);
       setExtractedData(data);
       setItemsToApply(enrichedItems);
 
-      const aiLabel = data.source === 'openai' ? 'OpenAI gpt-4o-mini' : 'IA';
+      const aiLabel = data.source === 'openai' ? 'OpenAI gpt-4o-mini' : 'Servidor IA';
       onShowToast(
-        `¡${aiLabel} completada! Se identificaron ${enrichedItems.length} productos de ${detectedSupplier}.`,
+        `¡${aiLabel} completada! Se identificaron ${enrichedItems.length} productos reales de ${detectedSupplier}.`,
         'auto_awesome'
       );
-    } catch (error) {
-      console.error(error);
-      onShowToast('Error al analizar la factura con IA', 'error');
+    } catch (error: any) {
+      console.error('[OpenAI Error]', error);
+      onShowToast(error?.message || 'Error al analizar la factura con OpenAI', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -435,6 +462,19 @@ TOTAL RECIBIDO: $213.60 USD`);
                   <span className="material-symbols-outlined text-[13px]">auto_awesome</span>
                   OpenAI gpt-4o-mini
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setShowApiKeySettings(!showApiKeySettings)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                    getOpenAIApiKey()
+                      ? 'bg-[#e8f5e9] text-[#2e7d32] hover:bg-[#c8e6c9]'
+                      : 'bg-[#fff3e0] text-[#e65100] hover:bg-[#ffe0b2]'
+                  }`}
+                  title="Configurar clave de OpenAI (VITE_OPENAI_API_KEY)"
+                >
+                  <span className="material-symbols-outlined text-[12px]">vpn_key</span>
+                  <span>{getOpenAIApiKey() ? 'API Key activa' : 'Ingresar API Key'}</span>
+                </button>
                 {isTrial && (
                   <span
                     className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
@@ -462,6 +502,45 @@ TOTAL RECIBIDO: $213.60 USD`);
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
+
+        {/* Banner de Configuración de API Key si se solicita o no está configurada */}
+        {showApiKeySettings && (
+          <div className="mx-4 sm:mx-6 mt-3 p-3 bg-[#fff8f0] border border-[#ffb77d] rounded-2xl flex flex-col sm:flex-row items-center gap-2 text-xs animate-in fade-in duration-150">
+            <div className="flex items-center gap-1.5 text-[#8d4b00] font-bold shrink-0">
+              <span className="material-symbols-outlined text-[18px]">key</span>
+              <span>Clave OpenAI (gpt-4o-mini):</span>
+            </div>
+            <input
+              type="password"
+              placeholder={getOpenAIApiKey() ? '••••••••••••••••••••••••••••••••' : 'sk-proj-...'}
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              className="flex-1 w-full px-3 py-1.5 bg-white border border-[#dbc2b0] rounded-xl text-xs font-mono focus:outline-none focus:border-[#006c4a]"
+            />
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  if (apiKeyInput.trim()) {
+                    setStoredOpenAIApiKey(apiKeyInput.trim());
+                    setShowApiKeySettings(false);
+                    onShowToast('Clave de OpenAI guardada exitosamente', 'check_circle');
+                  }
+                }}
+                className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-[#006c4a] text-white font-bold hover:bg-[#00573b] cursor-pointer"
+              >
+                Guardar
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowApiKeySettings(false)}
+                className="px-2.5 py-1.5 rounded-xl bg-white border border-[#dbc2b0] text-[#554336] text-xs font-semibold hover:bg-[#f5f0eb] cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Modal Scrollable Body */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">

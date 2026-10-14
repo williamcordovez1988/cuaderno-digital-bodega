@@ -206,7 +206,7 @@ export async function processInvoiceWithOpenAI(
   const rate = payload.exchangeRate || 877.90;
 
   if (!apiKey) {
-    return generateSmartFallback(payload);
+    throw new Error('No se ha configurado la clave de OpenAI (VITE_OPENAI_API_KEY o OPENAI_API_KEY).');
   }
 
   const catalogSummary = payload.catalog
@@ -296,13 +296,16 @@ Extrae en formato JSON estricto:
     });
 
     if (!response.ok) {
-      console.warn(`[OpenAI Server] Error HTTP ${response.status}`);
-      return generateSmartFallback(payload);
+      const errText = await response.text();
+      console.warn(`[OpenAI Server] Error HTTP ${response.status}: ${errText}`);
+      throw new Error(`OpenAI API error ${response.status}: ${errText}`);
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
-    if (!content) return generateSmartFallback(payload);
+    if (!content) {
+      throw new Error('OpenAI no devolvió texto en su respuesta.');
+    }
 
     const parsed = JSON.parse(content.trim());
     const rawItems: any[] = Array.isArray(parsed.items) ? parsed.items : [];
