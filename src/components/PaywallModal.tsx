@@ -119,11 +119,11 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
               <span className="material-symbols-outlined text-[#8d4b00] text-[20px]">verified</span>
               <div>
                 <div className="text-xs font-extrabold text-[#111c2d]">Plan Pro Negocio</div>
-                <div className="text-[10px] text-[#554336]">Acceso completo inmediato sin permanencia</div>
+                <div className="text-[10px] text-[#554336]">Inventario ilimitado y 20 escaneos IA (o Premium VIP $19.99)</div>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-lg font-black text-[#8d4b00] font-numeric-tally">$19</span>
+              <span className="text-lg font-black text-[#8d4b00] font-numeric-tally">$9.99</span>
               <span className="text-[10px] text-[#554336] font-semibold"> /mes</span>
             </div>
           </div>

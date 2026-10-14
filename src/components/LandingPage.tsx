@@ -17,6 +17,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onShowToast,
   bcvRate = 65.40
 }) => {
+  // Subscription Plan selection for checkout ('pro' or 'premium')
+  const [selectedPlan, setSelectedPlan] = useState<'pro' | 'premium'>('pro');
+
   // Direct Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedPaymentTab, setSelectedPaymentTab] = useState<'pago_movil' | 'binance' | 'zinli'>('pago_movil');
@@ -30,6 +33,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   // Mobile navigation menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Open modal with specific plan
+  const openPaymentModal = (plan: 'pro' | 'premium' = 'pro') => {
+    setSelectedPlan(plan);
+    setIsPaymentModalOpen(true);
+  };
+
+  // Helper calculations for current plan
+  const currentPlanName = selectedPlan === 'premium' ? 'Plan Premium ($19.99 / mes)' : 'Plan Pro ($9.99 / mes)';
+  const currentPlanPriceUSD = selectedPlan === 'premium' ? 19.99 : 9.99;
+  const currentPlanPriceBs = (currentPlanPriceUSD * bcvRate).toFixed(2);
+
   // Copy to clipboard helper
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -40,30 +54,32 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     }, 2500);
   };
 
-  // WhatsApp Payment Report Link Generator
+  // WhatsApp Payment Confirmation Notification (+584241289468)
   const handleReportPaymentWhatsApp = () => {
-    const adminPhone = '584141234567'; // Admin / Author WhatsApp
+    const adminPhone = '584241289468'; // Número de WhatsApp oficial del Administrador
+    const planLabel = selectedPlan === 'premium' ? 'Plan Premium' : 'Plan Pro';
+    const storeLabel = reportStoreName.trim() || 'Mi Negocio';
     const methodNames = {
-      pago_movil: 'Pago Móvil / Transferencia Bancaria',
+      pago_movil: 'Pago Móvil / Banco Mercantil (0105)',
       binance: 'Binance Pay (USDT)',
-      zinli: 'Zinli (USD)'
+      zinli: 'Zinli'
     };
     const methodName = methodNames[selectedPaymentTab];
 
-    const message = `¡Hola Ing. William Cordovez! 👋 Acabo de realizar el pago para activar el *Plan Pro* de *Cuaderno Digital Bodega*.
+    const message = `Hola Ing. William, he realizado el pago para activar el ${planLabel} en mi negocio ${storeLabel}. Adjunto mi comprobante.${
+      reportRefNumber.trim() ? ` (Ref: ${reportRefNumber.trim()})` : ''
+    }
 
-📋 *Detalles de la Activación:*
-• *Plan:* Plan Pro ($9.99 USD / mes)
-• *Negocio / Bodega:* ${reportStoreName.trim() || 'Mi Bodega'}
-• *Correo Registrado:* ${reportUserEmail.trim() || 'No especificado'}
-• *Método de Pago:* ${methodName}
-• *Nro. de Referencia:* ${reportRefNumber.trim() || 'Adjunto en comprobante'}
+📋 *Detalles de la Suscripción:*
+• *Plan:* ${currentPlanName}
+• *Negocio:* ${storeLabel}
+• *Método de Pago:* ${methodName}${reportUserEmail.trim() ? `\n• *Correo de Usuario:* ${reportUserEmail.trim()}` : ''}${reportRefNumber.trim() ? `\n• *Referencia / Comprobante:* ${reportRefNumber.trim()}` : ''}
 
-Por favor confirmar la recepción para habilitar el inventario ilimitado y escaneos con IA. ¡Muchas gracias!`;
+Por favor confirmar la activación. ¡Muchas gracias!`;
 
     const encoded = encodeURIComponent(message);
     window.open(`https://wa.me/${adminPhone}?text=${encoded}`, '_blank');
-    onShowToast('Abriendo WhatsApp para reportar pago...', 'chat');
+    onShowToast('Abriendo WhatsApp para notificar pago al Administrador...', 'chat');
   };
 
   const scrollToSection = (id: string) => {
@@ -125,11 +141,11 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
               Precios & Planes
             </button>
             <button
-              onClick={() => setIsPaymentModalOpen(true)}
+              onClick={() => openPaymentModal('pro')}
               className="hover:text-[#8d4b00] text-[#8d4b00] font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-[16px]">credit_card</span>
-              Activar Plan Pro
+              Suscripción & Planes
             </button>
           </nav>
 
@@ -203,12 +219,12 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
             <button
               onClick={() => {
                 setIsMobileMenuOpen(false);
-                setIsPaymentModalOpen(true);
+                openPaymentModal('pro');
               }}
               className="block w-full text-left py-2 text-xs font-black text-[#8d4b00] flex items-center gap-1.5"
             >
               <span className="material-symbols-outlined text-[18px]">credit_card</span>
-              Módulo de Pago Directo (Plan Pro)
+              Módulo de Pago Directo (Planes Pro & VIP)
             </button>
 
             <div className="pt-3 border-t border-[#E8E2D8] flex flex-col gap-2">
@@ -722,32 +738,32 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto items-stretch">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto items-stretch">
             
-            {/* Plan 1: Plan Prueba (Gratis) */}
-            <div className="p-8 rounded-3xl bg-[#FAF8F5] border-2 border-[#E8E2D8] flex flex-col justify-between shadow-xs">
+            {/* Plan 1: Plan Gratuito ($0 / mes) */}
+            <div className="p-8 rounded-3xl bg-[#FAF8F5] border-2 border-[#E8E2D8] flex flex-col justify-between shadow-xs hover:border-[#dbc2b0] transition-all">
               <div className="space-y-6">
                 <div>
                   <span className="px-3 py-1 rounded-full bg-[#E8E2D8] text-[#554336] text-[11px] font-black uppercase tracking-wider">
-                    Versión de Entrada
+                    Para Iniciar
                   </span>
                   <h3 className="text-2xl font-heading font-black text-[#111c2d] mt-2">
-                    Plan Prueba (Gratis)
+                    Plan Gratuito
                   </h3>
                   <p className="text-xs text-[#554336] mt-1">
-                    Ideal para explorar la plataforma en tu negocio.
+                    Ideal para explorar la plataforma en tu negocio sin costo inicial.
                   </p>
                 </div>
 
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl font-black text-[#111c2d] font-heading">$0</span>
-                  <span className="text-xs font-bold text-[#554336]">/ para siempre</span>
+                  <span className="text-xs font-bold text-[#554336]">/ mes (Para siempre)</span>
                 </div>
 
                 <div className="space-y-3 pt-2 text-xs text-[#111c2d]">
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span>Hasta <strong>5 productos</strong> en inventario</span>
+                    <span>Límite de <strong>5 productos</strong> en inventario</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
@@ -755,19 +771,19 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span>Gestión de fiados y cuentas por cobrar</span>
+                    <span>Registro de ventas diarias y cobros</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span>Recordatorios por WhatsApp con 1 clic</span>
+                    <span>Fiados y recordatorios por WhatsApp</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span>Conversión en vivo a Tasa BCV (USD / Bs)</span>
+                    <span><strong>1 usuario</strong> activo (Dueño)</span>
                   </div>
-                  <div className="flex items-center gap-2 text-[#8d7c71]">
-                    <span className="material-symbols-outlined text-[#8d7c71] text-[18px]">remove</span>
-                    <span>Sin usuarios adicionales ni roles avanzados</span>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
+                    <span>Conversión en vivo a Tasa Oficial BCV</span>
                   </div>
                 </div>
               </div>
@@ -776,66 +792,66 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                 <button
                   type="button"
                   onClick={() => onNavigate('/register')}
-                  className="w-full py-3.5 px-4 rounded-xl border-2 border-[#8d4b00] text-[#8d4b00] hover:bg-[#8d4b00] hover:text-white font-extrabold text-xs sm:text-sm transition-all text-center cursor-pointer"
+                  className="w-full py-3.5 px-4 rounded-xl border-2 border-[#8d4b00] text-[#8d4b00] hover:bg-[#8d4b00] hover:text-white font-black text-xs sm:text-sm transition-all text-center cursor-pointer active:scale-95"
                 >
-                  🚀 Comenzar Gratis Ahora
+                  🚀 Probar Gratis
                 </button>
               </div>
             </div>
 
-            {/* Plan 2: Plan Pro (Suscripción Comercial) */}
+            {/* Plan 2: Plan Pro ($9.99 / mes) — 'Más Popular' */}
             <div className="p-8 rounded-3xl bg-white border-2 border-[#8d4b00] flex flex-col justify-between shadow-xl relative overflow-hidden ring-4 ring-[#ffdcc3]/50">
               {/* Highlight ribbon */}
               <div className="absolute top-0 right-0 bg-[#8d4b00] text-white text-[10px] font-black uppercase tracking-wider py-1.5 px-8 rotate-45 translate-x-7 translate-y-3 shadow-xs">
-                Popular
+                Más Popular
               </div>
 
               <div className="space-y-6">
                 <div>
                   <span className="px-3 py-1 rounded-full bg-[#ffdcc3] text-[#8d4b00] text-[11px] font-black uppercase tracking-wider">
-                    Comercial Completo
+                    Más Popular
                   </span>
                   <h3 className="text-2xl font-heading font-black text-[#111c2d] mt-2">
                     Plan Pro
                   </h3>
                   <p className="text-xs text-[#554336] mt-1">
-                    Inventario sin límites y automatización absoluta.
+                    El favorito de las bodegas activas con control de empleados.
                   </p>
                 </div>
 
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl font-black text-[#8d4b00] font-heading">$9.99</span>
-                  <span className="text-xs font-bold text-[#554336]">/ mes (o $99 anual)</span>
+                  <span className="text-xs font-bold text-[#554336]">/ mes</span>
                 </div>
 
                 <div className="space-y-3 pt-2 text-xs text-[#111c2d]">
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span><strong>Inventario ILIMITADO</strong> de productos</span>
+                    <span><strong>Inventario ILIMITADO</strong> sin topes</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span><strong>Lectura ILIMITADA de facturas con IA</strong> (Gemini)</span>
+                    <span><strong>20 escaneos de facturas con IA / mes</strong></span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span><strong>Usuarios y colaboradores ilimitados</strong> con roles</span>
+                    <span><strong>Cobros por WhatsApp ILIMITADOS</strong> con 1 clic</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span>Jerarquía de 3 roles (Dueño, Admin, Cajero)</span>
+                    <span><strong>Cierre de caja diario</strong> con desglose USD / Bs</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span>Envío de Cierre de Caja por WhatsApp al Dueño</span>
+                    <span><strong>Hasta 3 usuarios</strong> (Dueño + 2 Empleados)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span>Personalización de Logo y Marca de la bodega</span>
+                    <span>Control de permisos por Rol (Dueño, Admin, Cajero)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
-                    <span>Soporte prioritario directo por WhatsApp</span>
+                    <span>Envío del Cierre diario por WhatsApp al Dueño</span>
                   </div>
                 </div>
               </div>
@@ -843,11 +859,80 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
               <div className="pt-8">
                 <button
                   type="button"
-                  onClick={() => setIsPaymentModalOpen(true)}
-                  className="w-full py-4 px-4 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  onClick={() => openPaymentModal('pro')}
+                  className="w-full py-4 px-4 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white font-black text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
-                  <span className="material-symbols-outlined text-[20px]">credit_card</span>
-                  💳 Activar Plan Pro Ahora
+                  <span className="material-symbols-outlined text-[20px]">workspace_premium</span>
+                  Suscribirme a Pro
+                </button>
+              </div>
+            </div>
+
+            {/* Plan 3: Plan Premium ($19.99 / mes) — 'Sin Límites VIP' */}
+            <div className="p-8 rounded-3xl bg-gradient-to-b from-[#FAF8F5] via-white to-white border-2 border-[#111c2d] flex flex-col justify-between shadow-xl relative overflow-hidden">
+              {/* Highlight ribbon */}
+              <div className="absolute top-0 right-0 bg-[#111c2d] text-[#ffdcc3] text-[10px] font-black uppercase tracking-wider py-1.5 px-8 rotate-45 translate-x-7 translate-y-3 shadow-xs">
+                VIP
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <span className="px-3 py-1 rounded-full bg-[#111c2d] text-[#ffdcc3] text-[11px] font-black uppercase tracking-wider">
+                    Sin Límites VIP
+                  </span>
+                  <h3 className="text-2xl font-heading font-black text-[#111c2d] mt-2">
+                    Plan Premium
+                  </h3>
+                  <p className="text-xs text-[#554336] mt-1">
+                    Automatización absoluta para medianos comercios y distribuidoras.
+                  </p>
+                </div>
+
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-black text-[#111c2d] font-heading">$19.99</span>
+                  <span className="text-xs font-bold text-[#554336]">/ mes</span>
+                </div>
+
+                <div className="space-y-3 pt-2 text-xs text-[#111c2d]">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#8d4b00] text-[18px]">stars</span>
+                    <span><strong>Todo lo del Plan Pro</strong> incluido</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
+                    <span><strong>Lectura de facturas con IA ILIMITADA</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
+                    <span><strong>Usuarios e integrantes ILIMITADOS</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
+                    <span><strong>Exportación a Excel / PDF</strong> de reportes</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
+                    <span><strong>Soporte prioritario VIP 24/7</strong> directo</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
+                    <span>Personalización avanzada de Logo y Marca</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#006c4a] text-[18px]">check_circle</span>
+                    <span>Acceso anticipado a nuevas herramientas de IA</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-8">
+                <button
+                  type="button"
+                  onClick={() => openPaymentModal('premium')}
+                  className="w-full py-4 px-4 rounded-xl bg-[#111c2d] hover:bg-[#203350] text-[#ffdcc3] font-black text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[20px]">diamond</span>
+                  Obtener Premium
                 </button>
               </div>
             </div>
@@ -876,74 +961,121 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
           {/* Payment Card Container */}
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8E2D8] shadow-lg space-y-6">
             
-            {/* Tabs for Payment Methods */}
-            <div className="grid grid-cols-3 gap-2 bg-[#FAF8F5] p-1.5 rounded-2xl border border-[#dbc2b0]/40">
-              <button
-                type="button"
-                onClick={() => setSelectedPaymentTab('pago_movil')}
-                className={`py-2.5 px-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  selectedPaymentTab === 'pago_movil'
-                    ? 'bg-white text-[#8d4b00] shadow-xs'
-                    : 'text-[#554336] hover:text-[#111c2d]'
-                }`}
-              >
-                <span>🇻🇪</span>
-                <span className="truncate">Pago Móvil / Banco</span>
-              </button>
+            {/* Step 1: Selector of Plan to Pay */}
+            <div>
+              <label className="block text-xs font-black text-[#554336] uppercase tracking-wider mb-2">
+                1. Selecciona el Plan que deseas activar:
+              </label>
+              <div className="grid grid-cols-2 gap-3 p-1.5 bg-[#FAF8F5] rounded-2xl border border-[#dbc2b0]/40">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlan('pro')}
+                  className={`py-3 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+                    selectedPlan === 'pro'
+                      ? 'bg-[#8d4b00] text-white shadow-md'
+                      : 'text-[#554336] hover:bg-white hover:text-[#111c2d]'
+                  }`}
+                >
+                  <span className="flex items-center gap-1 font-heading font-black">
+                    ⭐ Plan Pro
+                  </span>
+                  <span className="text-[11px] opacity-90 font-mono">
+                    ($9.99 / mes)
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setSelectedPaymentTab('binance')}
-                className={`py-2.5 px-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  selectedPaymentTab === 'binance'
-                    ? 'bg-white text-[#8d4b00] shadow-xs'
-                    : 'text-[#554336] hover:text-[#111c2d]'
-                }`}
-              >
-                <span>🟡</span>
-                <span className="truncate">Binance Pay</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedPaymentTab('zinli')}
-                className={`py-2.5 px-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  selectedPaymentTab === 'zinli'
-                    ? 'bg-white text-[#8d4b00] shadow-xs'
-                    : 'text-[#554336] hover:text-[#111c2d]'
-                }`}
-              >
-                <span>🟢</span>
-                <span className="truncate">Zinli</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlan('premium')}
+                  className={`py-3 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+                    selectedPlan === 'premium'
+                      ? 'bg-[#111c2d] text-[#ffdcc3] shadow-md'
+                      : 'text-[#554336] hover:bg-white hover:text-[#111c2d]'
+                  }`}
+                >
+                  <span className="flex items-center gap-1 font-heading font-black">
+                    💎 Plan Premium
+                  </span>
+                  <span className="text-[11px] opacity-90 font-mono">
+                    ($19.99 / mes)
+                  </span>
+                </button>
+              </div>
             </div>
 
-            {/* Content for Selected Payment Method */}
+            {/* Step 2: Tabs for Payment Methods */}
+            <div>
+              <label className="block text-xs font-black text-[#554336] uppercase tracking-wider mb-2">
+                2. Selecciona tu método de pago preferido:
+              </label>
+              <div className="grid grid-cols-3 gap-2 bg-[#FAF8F5] p-1.5 rounded-2xl border border-[#dbc2b0]/40">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPaymentTab('pago_movil')}
+                  className={`py-2.5 px-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    selectedPaymentTab === 'pago_movil'
+                      ? 'bg-white text-[#8d4b00] shadow-xs'
+                      : 'text-[#554336] hover:text-[#111c2d]'
+                  }`}
+                >
+                  <span>🇻🇪</span>
+                  <span className="truncate">Pago Móvil / Banco</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedPaymentTab('binance')}
+                  className={`py-2.5 px-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    selectedPaymentTab === 'binance'
+                      ? 'bg-white text-[#8d4b00] shadow-xs'
+                      : 'text-[#554336] hover:text-[#111c2d]'
+                  }`}
+                >
+                  <span>🟡</span>
+                  <span className="truncate">Binance Pay</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedPaymentTab('zinli')}
+                  className={`py-2.5 px-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    selectedPaymentTab === 'zinli'
+                      ? 'bg-white text-[#8d4b00] shadow-xs'
+                      : 'text-[#554336] hover:text-[#111c2d]'
+                  }`}
+                >
+                  <span>🟢</span>
+                  <span className="truncate">Zinli</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Content for Selected Payment Method with Exact Real Banking Data */}
             <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#dbc2b0]/30 space-y-4">
               
-              {/* Option 1: Pago Móvil / Transferencia Nacional */}
+              {/* Option 1: Pago Móvil / Banco Mercantil */}
               {selectedPaymentTab === 'pago_movil' && (
                 <div className="space-y-3 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#E8E2D8]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-[#E8E2D8] gap-1">
                     <span className="text-xs font-black text-[#111c2d]">
-                      🇻🇪 Pago Móvil y Transferencia Bancaria Nacional
+                      🇻🇪 Pago Móvil / Banco Mercantil (0105)
                     </span>
-                    <span className="text-[11px] font-bold text-[#006c4a]">
-                      Monto: ${(9.99).toFixed(2)} USD ≈ {(9.99 * bcvRate).toFixed(2)} Bs
+                    <span className="text-xs font-black text-[#006c4a] bg-[#82f5c1]/20 px-2.5 py-1 rounded-lg">
+                      Monto a Transferir: ${currentPlanPriceUSD.toFixed(2)} USD ≈ {currentPlanPriceBs} Bs
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between">
+                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between shadow-xs">
                       <div>
                         <span className="text-[10px] text-[#554336] block">Banco:</span>
-                        <span className="font-extrabold text-[#111c2d]">Banesco (0134) / BDV (0102)</span>
+                        <span className="font-extrabold text-[#111c2d]">Mercantil (0105)</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('Banesco', 'Banco')}
+                        onClick={() => copyToClipboard('Mercantil', 'Banco')}
                         className="p-1 text-[#8d4b00] hover:bg-[#ffdcc3]/50 rounded cursor-pointer"
-                        title="Copiar"
+                        title="Copiar Banco"
                       >
                         <span className="material-symbols-outlined text-[18px]">
                           {copiedKey === 'Banco' ? 'done' : 'content_copy'}
@@ -951,16 +1083,16 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                       </button>
                     </div>
 
-                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between">
+                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between shadow-xs">
                       <div>
                         <span className="text-[10px] text-[#554336] block">Teléfono Pago Móvil:</span>
-                        <span className="font-mono font-extrabold text-[#111c2d]">0414-1234567</span>
+                        <span className="font-mono font-extrabold text-[#111c2d]">04241289468</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('04141234567', 'Teléfono')}
+                        onClick={() => copyToClipboard('04241289468', 'Teléfono')}
                         className="p-1 text-[#8d4b00] hover:bg-[#ffdcc3]/50 rounded cursor-pointer"
-                        title="Copiar"
+                        title="Copiar Teléfono"
                       >
                         <span className="material-symbols-outlined text-[18px]">
                           {copiedKey === 'Teléfono' ? 'done' : 'content_copy'}
@@ -968,16 +1100,16 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                       </button>
                     </div>
 
-                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between">
+                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between shadow-xs">
                       <div>
-                        <span className="text-[10px] text-[#554336] block">Cédula / RIF:</span>
-                        <span className="font-mono font-extrabold text-[#111c2d]">V-12.345.678</span>
+                        <span className="text-[10px] text-[#554336] block">Cédula de Identidad:</span>
+                        <span className="font-mono font-extrabold text-[#111c2d]">17711254</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('12345678', 'Cédula')}
+                        onClick={() => copyToClipboard('17711254', 'Cédula')}
                         className="p-1 text-[#8d4b00] hover:bg-[#ffdcc3]/50 rounded cursor-pointer"
-                        title="Copiar"
+                        title="Copiar Cédula"
                       >
                         <span className="material-symbols-outlined text-[18px]">
                           {copiedKey === 'Cédula' ? 'done' : 'content_copy'}
@@ -985,7 +1117,7 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                       </button>
                     </div>
 
-                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between">
+                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between shadow-xs">
                       <div>
                         <span className="text-[10px] text-[#554336] block">Beneficiario:</span>
                         <span className="font-extrabold text-[#111c2d]">Ing. William Cordovez</span>
@@ -994,7 +1126,7 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                         type="button"
                         onClick={() => copyToClipboard('William Cordovez', 'Beneficiario')}
                         className="p-1 text-[#8d4b00] hover:bg-[#ffdcc3]/50 rounded cursor-pointer"
-                        title="Copiar"
+                        title="Copiar Beneficiario"
                       >
                         <span className="material-symbols-outlined text-[18px]">
                           {copiedKey === 'Beneficiario' ? 'done' : 'content_copy'}
@@ -1002,49 +1134,52 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                       </button>
                     </div>
                   </div>
+                  <p className="text-[11px] text-[#554336]">
+                    Tasa Oficial BCV aplicada en vivo: <strong>{bcvRate.toFixed(2)} Bs / USD</strong>.
+                  </p>
                 </div>
               )}
 
-              {/* Option 2: Binance Pay */}
+              {/* Option 2: Binance Pay (USDT) */}
               {selectedPaymentTab === 'binance' && (
                 <div className="space-y-3 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#E8E2D8]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-[#E8E2D8] gap-1">
                     <span className="text-xs font-black text-[#111c2d]">
                       🟡 Binance Pay (USDT)
                     </span>
-                    <span className="text-[11px] font-bold text-[#8d4b00]">
-                      Monto: $9.99 USDT (Sin comisiones)
+                    <span className="text-xs font-black text-[#8d4b00] bg-[#ffdcc3]/40 px-2.5 py-1 rounded-lg">
+                      Monto a Enviar: ${currentPlanPriceUSD.toFixed(2)} USDT (0% comisiones)
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between">
+                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between shadow-xs">
                       <div>
-                        <span className="text-[10px] text-[#554336] block">Binance Pay ID:</span>
-                        <span className="font-mono font-extrabold text-[#111c2d]">284910293</span>
+                        <span className="text-[10px] text-[#554336] block">Binance ID:</span>
+                        <span className="font-mono font-extrabold text-[#111c2d]">359875423</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('284910293', 'Binance Pay ID')}
+                        onClick={() => copyToClipboard('359875423', 'Binance ID')}
                         className="p-1 text-[#8d4b00] hover:bg-[#ffdcc3]/50 rounded cursor-pointer"
-                        title="Copiar"
+                        title="Copiar Binance ID"
                       >
                         <span className="material-symbols-outlined text-[18px]">
-                          {copiedKey === 'Binance Pay ID' ? 'done' : 'content_copy'}
+                          {copiedKey === 'Binance ID' ? 'done' : 'content_copy'}
                         </span>
                       </button>
                     </div>
 
-                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between">
+                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between shadow-xs">
                       <div>
                         <span className="text-[10px] text-[#554336] block">Correo Binance:</span>
-                        <span className="font-mono font-extrabold text-[#111c2d]">williamcordovezcn@gmail.com</span>
+                        <span className="font-mono font-extrabold text-[#111c2d]">Williamcordovez@gmail.com</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('williamcordovezcn@gmail.com', 'Correo Binance')}
+                        onClick={() => copyToClipboard('Williamcordovez@gmail.com', 'Correo Binance')}
                         className="p-1 text-[#8d4b00] hover:bg-[#ffdcc3]/50 rounded cursor-pointer"
-                        title="Copiar"
+                        title="Copiar Correo Binance"
                       >
                         <span className="material-symbols-outlined text-[18px]">
                           {copiedKey === 'Correo Binance' ? 'done' : 'content_copy'}
@@ -1053,7 +1188,7 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                     </div>
                   </div>
                   <p className="text-[11px] text-[#554336]">
-                    Transferencia instantánea 0% comisiones entre usuarios de Binance.
+                    Envío instantáneo y seguro entre usuarios de Binance Pay con 0% de comisión.
                   </p>
                 </div>
               )}
@@ -1061,26 +1196,26 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
               {/* Option 3: Zinli */}
               {selectedPaymentTab === 'zinli' && (
                 <div className="space-y-3 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#E8E2D8]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-[#E8E2D8] gap-1">
                     <span className="text-xs font-black text-[#111c2d]">
                       🟢 Zinli Billetera Digital USD
                     </span>
-                    <span className="text-[11px] font-bold text-[#006c4a]">
-                      Monto: $9.99 USD
+                    <span className="text-xs font-black text-[#006c4a] bg-[#82f5c1]/20 px-2.5 py-1 rounded-lg">
+                      Monto a Enviar: ${currentPlanPriceUSD.toFixed(2)} USD
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between">
+                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between shadow-xs">
                       <div>
                         <span className="text-[10px] text-[#554336] block">Correo Zinli:</span>
-                        <span className="font-mono font-extrabold text-[#111c2d]">williamcordovezcn@gmail.com</span>
+                        <span className="font-mono font-extrabold text-[#111c2d]">Williamcordovezcn@gmail.com</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('williamcordovezcn@gmail.com', 'Correo Zinli')}
+                        onClick={() => copyToClipboard('Williamcordovezcn@gmail.com', 'Correo Zinli')}
                         className="p-1 text-[#8d4b00] hover:bg-[#ffdcc3]/50 rounded cursor-pointer"
-                        title="Copiar"
+                        title="Copiar Correo Zinli"
                       >
                         <span className="material-symbols-outlined text-[18px]">
                           {copiedKey === 'Correo Zinli' ? 'done' : 'content_copy'}
@@ -1088,7 +1223,7 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                       </button>
                     </div>
 
-                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between">
+                    <div className="p-3 bg-white rounded-xl border border-[#E8E2D8] flex items-center justify-between shadow-xs">
                       <div>
                         <span className="text-[10px] text-[#554336] block">Titular:</span>
                         <span className="font-extrabold text-[#111c2d]">Ing. William Cordovez</span>
@@ -1097,7 +1232,7 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                         type="button"
                         onClick={() => copyToClipboard('William Cordovez', 'Titular')}
                         className="p-1 text-[#8d4b00] hover:bg-[#ffdcc3]/50 rounded cursor-pointer"
-                        title="Copiar"
+                        title="Copiar Titular"
                       >
                         <span className="material-symbols-outlined text-[18px]">
                           {copiedKey === 'Titular' ? 'done' : 'content_copy'}
@@ -1105,50 +1240,58 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                       </button>
                     </div>
                   </div>
+                  <p className="text-[11px] text-[#554336]">
+                    Transferencia directa e inmediata desde cualquier tarjeta o cuenta Zinli.
+                  </p>
                 </div>
               )}
 
             </div>
 
             {/* Quick Report Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-[#111c2d] mb-1">
-                  Nombre de tu Bodega:
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej. Bodega San José"
-                  value={reportStoreName}
-                  onChange={(e) => setReportStoreName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl focus:outline-none focus:border-[#8d4b00]"
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-black text-[#554336] uppercase tracking-wider mb-2">
+                3. Datos de tu Bodega para la Activación:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#111c2d] mb-1">
+                    Nombre de tu Bodega / Negocio:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Bodega La Bendición"
+                    value={reportStoreName}
+                    onChange={(e) => setReportStoreName(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl focus:outline-none focus:border-[#8d4b00]"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#111c2d] mb-1">
-                  Correo Registrado:
-                </label>
-                <input
-                  type="email"
-                  placeholder="tucorreo@ejemplo.com"
-                  value={reportUserEmail}
-                  onChange={(e) => setReportUserEmail(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl focus:outline-none focus:border-[#8d4b00]"
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#111c2d] mb-1">
+                    Correo Registrado:
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="tucorreo@ejemplo.com"
+                    value={reportUserEmail}
+                    onChange={(e) => setReportUserEmail(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl focus:outline-none focus:border-[#8d4b00]"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#111c2d] mb-1">
-                  Nro. de Referencia:
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej. 12948293"
-                  value={reportRefNumber}
-                  onChange={(e) => setReportRefNumber(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl focus:outline-none focus:border-[#8d4b00]"
-                />
+                <div>
+                  <label className="block text-xs font-bold text-[#111c2d] mb-1">
+                    Nro. de Referencia o Comprobante:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej. 12948293"
+                    value={reportRefNumber}
+                    onChange={(e) => setReportRefNumber(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl focus:outline-none focus:border-[#8d4b00]"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1159,7 +1302,7 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
               className="w-full py-4 px-6 rounded-2xl bg-[#006c4a] hover:bg-[#005137] text-white font-black text-sm sm:text-base shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
               <span className="material-symbols-outlined text-[24px]">chat</span>
-              <span>📲 Reportar Pago por WhatsApp para Activación Inmediata</span>
+              <span>📲 Notificar Pago al Administrador</span>
             </button>
 
           </div>
@@ -1177,15 +1320,19 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-[#E8E2D8] overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
             
             {/* Modal Header */}
-            <div className="p-6 bg-[#8d4b00] text-white flex items-center justify-between">
+            <div className={`p-6 text-white flex items-center justify-between transition-colors ${
+              selectedPlan === 'premium' ? 'bg-[#111c2d]' : 'bg-[#8d4b00]'
+            }`}>
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-[28px]">credit_card</span>
+                <span className="material-symbols-outlined text-[28px]">
+                  {selectedPlan === 'premium' ? 'diamond' : 'workspace_premium'}
+                </span>
                 <div>
                   <h3 className="font-heading font-black text-base sm:text-lg">
-                    💳 Activar Plan Pro Ahora
+                    💳 {selectedPlan === 'premium' ? 'Activar Plan Premium' : 'Activar Plan Pro'}
                   </h3>
                   <p className="text-xs opacity-90">
-                    Suscripción Comercial con acceso ilimitado
+                    {selectedPlan === 'premium' ? 'Sin Límites VIP • $19.99 / mes' : 'Más Popular • $9.99 / mes'}
                   </p>
                 </div>
               </div>
@@ -1193,20 +1340,49 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                 type="button"
                 onClick={() => setIsPaymentModalOpen(false)}
                 className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+                title="Cerrar modal"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6 space-y-4 max-h-[82vh] overflow-y-auto">
               
+              {/* Plan Switcher inside modal */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-[#FAF8F5] rounded-xl border border-[#dbc2b0]/30 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlan('pro')}
+                  className={`py-2 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    selectedPlan === 'pro'
+                      ? 'bg-[#8d4b00] text-white shadow-xs'
+                      : 'text-[#554336] hover:bg-white'
+                  }`}
+                >
+                  <span>⭐ Plan Pro</span>
+                  <span className="font-mono text-[10px] opacity-80">($9.99)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlan('premium')}
+                  className={`py-2 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    selectedPlan === 'premium'
+                      ? 'bg-[#111c2d] text-[#ffdcc3] shadow-xs'
+                      : 'text-[#554336] hover:bg-white'
+                  }`}
+                >
+                  <span>💎 Plan VIP</span>
+                  <span className="font-mono text-[10px] opacity-80">($19.99)</span>
+                </button>
+              </div>
+
               {/* Payment selector tabs */}
               <div className="grid grid-cols-3 gap-1.5 bg-[#FAF8F5] p-1 rounded-xl border border-[#dbc2b0]/30 text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setSelectedPaymentTab('pago_movil')}
-                  className={`py-2 px-1 rounded-lg transition-all ${
+                  className={`py-2 px-1 rounded-lg transition-all cursor-pointer ${
                     selectedPaymentTab === 'pago_movil'
                       ? 'bg-[#8d4b00] text-white'
                       : 'text-[#554336] hover:bg-white'
@@ -1217,7 +1393,7 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                 <button
                   type="button"
                   onClick={() => setSelectedPaymentTab('binance')}
-                  className={`py-2 px-1 rounded-lg transition-all ${
+                  className={`py-2 px-1 rounded-lg transition-all cursor-pointer ${
                     selectedPaymentTab === 'binance'
                       ? 'bg-[#8d4b00] text-white'
                       : 'text-[#554336] hover:bg-white'
@@ -1228,7 +1404,7 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                 <button
                   type="button"
                   onClick={() => setSelectedPaymentTab('zinli')}
-                  className={`py-2 px-1 rounded-lg transition-all ${
+                  className={`py-2 px-1 rounded-lg transition-all cursor-pointer ${
                     selectedPaymentTab === 'zinli'
                       ? 'bg-[#8d4b00] text-white'
                       : 'text-[#554336] hover:bg-white'
@@ -1238,38 +1414,44 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                 </button>
               </div>
 
-              {/* Account details */}
+              {/* Account details with Exact Real Banking Data */}
               <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#dbc2b0]/40 space-y-2 text-xs">
                 {selectedPaymentTab === 'pago_movil' && (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-[#554336]">Banco:</span>
-                      <span className="font-bold text-[#111c2d]">Banesco (0134) / BDV (0102)</span>
+                      <span className="font-bold text-[#111c2d]">Mercantil (0105)</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-[#554336]">Teléfono:</span>
+                      <span className="text-[#554336]">Teléfono Pago Móvil:</span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('04141234567', 'Teléfono')}
-                        className="font-mono font-bold text-[#8d4b00] hover:underline"
+                        onClick={() => copyToClipboard('04241289468', 'Teléfono')}
+                        className="font-mono font-bold text-[#8d4b00] hover:underline flex items-center gap-1"
                       >
-                        0414-1234567 📋
+                        04241289468
+                        <span className="material-symbols-outlined text-[14px]">content_copy</span>
                       </button>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-[#554336]">Cédula:</span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('12345678', 'Cédula')}
-                        className="font-mono font-bold text-[#8d4b00] hover:underline"
+                        onClick={() => copyToClipboard('17711254', 'Cédula')}
+                        className="font-mono font-bold text-[#8d4b00] hover:underline flex items-center gap-1"
                       >
-                        V-12.345.678 📋
+                        17711254
+                        <span className="material-symbols-outlined text-[14px]">content_copy</span>
                       </button>
                     </div>
-                    <div className="flex justify-between items-center pt-1 border-t border-[#E8E2D8]">
-                      <span className="text-[#554336]">Monto en Bs:</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[#554336]">Beneficiario:</span>
+                      <span className="font-extrabold text-[#111c2d]">Ing. William Cordovez</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-[#E8E2D8]">
+                      <span className="text-[#554336]">Monto en Bs (Tasa BCV {bcvRate.toFixed(2)}):</span>
                       <span className="font-black text-[#006c4a]">
-                        {(9.99 * bcvRate).toFixed(2)} Bs (Tasa BCV {bcvRate.toFixed(2)})
+                        {currentPlanPriceBs} Bs (${currentPlanPriceUSD.toFixed(2)} USD)
                       </span>
                     </div>
                   </div>
@@ -1278,28 +1460,30 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                 {selectedPaymentTab === 'binance' && (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-[#554336]">Binance Pay ID:</span>
+                      <span className="text-[#554336]">Binance ID:</span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('284910293', 'Pay ID')}
-                        className="font-mono font-bold text-[#8d4b00] hover:underline"
+                        onClick={() => copyToClipboard('359875423', 'Binance ID')}
+                        className="font-mono font-bold text-[#8d4b00] hover:underline flex items-center gap-1"
                       >
-                        284910293 📋
+                        359875423
+                        <span className="material-symbols-outlined text-[14px]">content_copy</span>
                       </button>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-[#554336]">Correo Binance:</span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('williamcordovezcn@gmail.com', 'Correo')}
-                        className="font-mono font-bold text-[#8d4b00] hover:underline"
+                        onClick={() => copyToClipboard('Williamcordovez@gmail.com', 'Correo Binance')}
+                        className="font-mono font-bold text-[#8d4b00] hover:underline flex items-center gap-1"
                       >
-                        williamcordovezcn@gmail.com 📋
+                        Williamcordovez@gmail.com
+                        <span className="material-symbols-outlined text-[14px]">content_copy</span>
                       </button>
                     </div>
-                    <div className="flex justify-between items-center pt-1 border-t border-[#E8E2D8]">
-                      <span className="text-[#554336]">Monto:</span>
-                      <span className="font-black text-[#006c4a]">$9.99 USDT</span>
+                    <div className="flex justify-between items-center pt-2 border-t border-[#E8E2D8]">
+                      <span className="text-[#554336]">Monto a Transferir:</span>
+                      <span className="font-black text-[#006c4a]">${currentPlanPriceUSD.toFixed(2)} USDT</span>
                     </div>
                   </div>
                 )}
@@ -1310,19 +1494,20 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
                       <span className="text-[#554336]">Correo Zinli:</span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('williamcordovezcn@gmail.com', 'Correo')}
-                        className="font-mono font-bold text-[#8d4b00] hover:underline"
+                        onClick={() => copyToClipboard('Williamcordovezcn@gmail.com', 'Correo Zinli')}
+                        className="font-mono font-bold text-[#8d4b00] hover:underline flex items-center gap-1"
                       >
-                        williamcordovezcn@gmail.com 📋
+                        Williamcordovezcn@gmail.com
+                        <span className="material-symbols-outlined text-[14px]">content_copy</span>
                       </button>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-[#554336]">Titular:</span>
                       <span className="font-bold text-[#111c2d]">Ing. William Cordovez</span>
                     </div>
-                    <div className="flex justify-between items-center pt-1 border-t border-[#E8E2D8]">
-                      <span className="text-[#554336]">Monto:</span>
-                      <span className="font-black text-[#006c4a]">$9.99 USD</span>
+                    <div className="flex justify-between items-center pt-2 border-t border-[#E8E2D8]">
+                      <span className="text-[#554336]">Monto a Transferir:</span>
+                      <span className="font-black text-[#006c4a]">${currentPlanPriceUSD.toFixed(2)} USD</span>
                     </div>
                   </div>
                 )}
@@ -1361,10 +1546,10 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
               <button
                 type="button"
                 onClick={handleReportPaymentWhatsApp}
-                className="w-full py-3.5 px-4 rounded-xl bg-[#006c4a] hover:bg-[#005137] text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3.5 px-4 rounded-xl bg-[#006c4a] hover:bg-[#005137] text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <span className="material-symbols-outlined text-[20px]">chat</span>
-                <span>📲 Reportar Pago por WhatsApp</span>
+                <span>📲 Notificar Pago al Administrador</span>
               </button>
 
             </div>
@@ -1404,10 +1589,10 @@ Por favor confirmar la recepción para habilitar el inventario ilimitado y escan
               Registrar Negocio
             </button>
             <button
-              onClick={() => setIsPaymentModalOpen(true)}
+              onClick={() => openPaymentModal('pro')}
               className="hover:text-[#8d4b00] text-[#8d4b00] transition-colors cursor-pointer"
             >
-              Activar Plan Pro
+              Planes & Suscripción
             </button>
           </div>
 
