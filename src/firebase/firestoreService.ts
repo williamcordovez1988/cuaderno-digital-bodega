@@ -1291,101 +1291,27 @@ export async function incrementOrgAiScansCount(orgId?: string | null): Promise<n
 
 export const SAAS_ORGANIZATIONS_REGISTRY_KEY = 'bodega_all_organizations_registry';
 
-export const INITIAL_SAAS_ORGANIZATIONS: OrganizationAdminRecord[] = [
-  {
-    id: 'org-william-cordovez',
-    nombre_negocio: 'Bodega William',
-    ownerName: 'Ing. William Cordovez',
-    ownerEmail: 'williamcordovezcn@gmail.com',
-    ownerPhone: '+584241289468',
-    plan_suscripcion: 'pro',
-    subscriptionStatus: 'active',
-    subscriptionExpiryDate: '2029-12-31',
-    fecha_registro: '2026-01-15T10:00:00.000Z',
-    productsCount: 14,
-    ai_scans_used: 6,
-    paymentNotes: 'Cuenta Principal SaaS Master Admin'
-  },
-  {
-    id: 'org-bodega-san-jose',
-    nombre_negocio: 'Bodega San José',
-    ownerName: 'Carlos Mendoza',
-    ownerEmail: 'carlos.mendoza@gmail.com',
-    ownerPhone: '+584141234567',
-    plan_suscripcion: 'pro',
-    subscriptionStatus: 'active',
-    subscriptionExpiryDate: '2026-11-20',
-    fecha_registro: '2026-02-10T14:30:00.000Z',
-    productsCount: 42,
-    ai_scans_used: 14,
-    paymentNotes: 'Pago Móvil Mercantil Ref: 894102'
-  },
-  {
-    id: 'org-abasto-el-ahorro',
-    nombre_negocio: 'Abasto El Ahorro Central',
-    ownerName: 'Carmen Rodríguez',
-    ownerEmail: 'carmen.ahorro@gmail.com',
-    ownerPhone: '+584245558899',
-    plan_suscripcion: 'premium',
-    subscriptionStatus: 'active',
-    subscriptionExpiryDate: '2026-12-05',
-    fecha_registro: '2026-03-01T09:15:00.000Z',
-    productsCount: 185,
-    ai_scans_used: 38,
-    paymentNotes: 'Binance Pay USDT Ref: 981245'
-  },
-  {
-    id: 'org-minimarket-chacao',
-    nombre_negocio: 'Minimarket Express Chacao',
-    ownerName: 'José Hernández',
-    ownerEmail: 'j.hernandez@expressmarket.ve',
-    ownerPhone: '+584163334411',
-    plan_suscripcion: 'pro',
-    subscriptionStatus: 'paused',
-    subscriptionExpiryDate: '2026-10-15',
-    fecha_registro: '2026-03-12T16:20:00.000Z',
-    productsCount: 38,
-    ai_scans_used: 9,
-    paymentNotes: 'Pausado temporal por remodelación'
-  },
-  {
-    id: 'org-viveres-don-pedro',
-    nombre_negocio: 'Víveres Don Pedro',
-    ownerName: 'Pedro Morales',
-    ownerEmail: 'donpedro.viveres@gmail.com',
-    ownerPhone: '+584249991122',
-    plan_suscripcion: 'gratuito',
-    subscriptionStatus: 'active',
-    subscriptionExpiryDate: '2026-11-15',
-    fecha_registro: '2026-04-05T11:45:00.000Z',
-    productsCount: 5,
-    ai_scans_used: 1,
-    paymentNotes: 'Plan Prueba Gratuito (Límite 5 productos)'
-  },
-  {
-    id: 'org-delicateses-teques',
-    nombre_negocio: 'Delicateses Los Teques',
-    ownerName: 'María Eugenia Soto',
-    ownerEmail: 'mariaeugenia.soto@gmail.com',
-    ownerPhone: '+584128882233',
-    plan_suscripcion: 'gratuito',
-    subscriptionStatus: 'expired',
-    subscriptionExpiryDate: '2026-02-28',
-    fecha_registro: '2026-01-20T08:00:00.000Z',
-    productsCount: 4,
-    ai_scans_used: 1,
-    paymentNotes: 'Pendiente confirmación de pago Pro'
-  }
+// Purge identifiers of any previous dummy mock data
+const LEGACY_DUMMY_IDS = [
+  'org-bodega-san-jose',
+  'org-abasto-el-ahorro',
+  'org-minimarket-chacao',
+  'org-viveres-don-pedro',
+  'org-delicateses-teques'
 ];
 
 export function syncOrganizationToMasterRegistry(org: Partial<OrganizationAdminRecord>): void {
   try {
+    if (!org.id || LEGACY_DUMMY_IDS.includes(org.id)) return;
     const raw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
-    let list: OrganizationAdminRecord[] = raw ? JSON.parse(raw) : [...INITIAL_SAAS_ORGANIZATIONS];
+    let list: OrganizationAdminRecord[] = raw ? JSON.parse(raw) : [];
+    // Ensure no dummy IDs exist
+    list = list.filter(item => !LEGACY_DUMMY_IDS.includes(item.id));
+
     const idx = list.findIndex(item => item.id === org.id);
     if (idx >= 0) {
       list[idx] = { ...list[idx], ...org };
-    } else if (org.id) {
+    } else {
       list.unshift({
         id: org.id,
         nombre_negocio: org.nombre_negocio || 'Nuevo Comercio',
@@ -1407,76 +1333,130 @@ export function syncOrganizationToMasterRegistry(org: Partial<OrganizationAdminR
   }
 }
 
+/**
+ * Consult real database records (Firestore) for all registered clients, eliminating static mock data.
+ */
 export async function getAllOrganizationsForAdmin(): Promise<OrganizationAdminRecord[]> {
-  const localRaw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
-  let records: OrganizationAdminRecord[] = localRaw ? JSON.parse(localRaw) : [...INITIAL_SAAS_ORGANIZATIONS];
+  // Purge legacy mock data from local cache
+  let cached: OrganizationAdminRecord[] = [];
+  try {
+    const localRaw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
+    if (localRaw) {
+      cached = (JSON.parse(localRaw) as OrganizationAdminRecord[]).filter(
+        r => !LEGACY_DUMMY_IDS.includes(r.id)
+      );
+    }
+  } catch {
+    cached = [];
+  }
 
-  // Try to sync with Firestore
-  if (auth.currentUser) {
-    try {
-      const orgsSnap = await getDocs(collection(db, ORGANIZATIONS_COLLECTION));
-      if (!orgsSnap.empty) {
-        const firestoreOrgs: Organization[] = [];
-        orgsSnap.forEach(d => {
+  let firestoreRecords: OrganizationAdminRecord[] = [];
+
+  // Query Real Data from Firestore
+  try {
+    const orgsSnap = await getDocs(collection(db, ORGANIZATIONS_COLLECTION));
+    if (!orgsSnap.empty) {
+      const firestoreOrgs: Organization[] = [];
+      orgsSnap.forEach(d => {
+        if (!LEGACY_DUMMY_IDS.includes(d.id)) {
           firestoreOrgs.push({ id: d.id, ...d.data() } as Organization);
-        });
+        }
+      });
 
-        // Also fetch profiles and products to enhance stats
+      // Fetch corresponding real profiles to match owner info
+      let profilesMap = new Map<string, UserProfile>();
+      try {
         const profilesSnap = await getDocs(collection(db, PROFILES_COLLECTION));
-        const profilesMap = new Map<string, UserProfile>();
         profilesSnap.forEach(d => {
           const p = d.data() as UserProfile;
           if (p.organization_id && (p.rol === 'dueno' || p.rol === 'dueño')) {
             profilesMap.set(p.organization_id, p);
           }
         });
+      } catch (e) {
+        console.warn('Could not fetch profiles for admin:', e);
+      }
 
+      // Fetch actual products count per organization
+      let productsCountMap = new Map<string, number>();
+      try {
         const productsSnap = await getDocs(collection(db, PRODUCTS_COLLECTION));
-        const productsCountMap = new Map<string, number>();
         productsSnap.forEach(d => {
           const pr = d.data() as Product;
           if (pr.organization_id) {
             productsCountMap.set(pr.organization_id, (productsCountMap.get(pr.organization_id) || 0) + 1);
           }
         });
-
-        // Merge firestore orgs into records
-        firestoreOrgs.forEach(fo => {
-          const ownerProf = profilesMap.get(fo.id);
-          const prCount = productsCountMap.get(fo.id) || 0;
-          const existingIdx = records.findIndex(r => r.id === fo.id);
-
-          const merged: OrganizationAdminRecord = {
-            id: fo.id,
-            nombre_negocio: fo.nombre_negocio || 'Comercio',
-            ownerName: fo.ownerName || ownerProf?.nombre || (existingIdx >= 0 ? records[existingIdx].ownerName : 'Dueño'),
-            ownerEmail: fo.ownerEmail || ownerProf?.email || (existingIdx >= 0 ? records[existingIdx].ownerEmail : ''),
-            ownerPhone: fo.telefono || (existingIdx >= 0 ? records[existingIdx].ownerPhone : ''),
-            plan_suscripcion: fo.plan_suscripcion || (existingIdx >= 0 ? records[existingIdx].plan_suscripcion : 'gratuito'),
-            subscriptionStatus: fo.subscriptionStatus || (existingIdx >= 0 ? records[existingIdx].subscriptionStatus : 'active'),
-            subscriptionExpiryDate: fo.subscriptionExpiryDate || (existingIdx >= 0 ? records[existingIdx].subscriptionExpiryDate : new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]),
-            fecha_registro: fo.fecha_registro || (existingIdx >= 0 ? records[existingIdx].fecha_registro : new Date().toISOString()),
-            productsCount: prCount || (existingIdx >= 0 ? records[existingIdx].productsCount : 0),
-            ai_scans_used: typeof fo.ai_scans_used === 'number' ? fo.ai_scans_used : (existingIdx >= 0 ? records[existingIdx].ai_scans_used : 0),
-            logoUrl: fo.logoUrl,
-            paymentNotes: fo.paymentNotes || (existingIdx >= 0 ? records[existingIdx].paymentNotes : '')
-          };
-
-          if (existingIdx >= 0) {
-            records[existingIdx] = merged;
-          } else {
-            records.unshift(merged);
-          }
-        });
+      } catch (e) {
+        console.warn('Could not fetch products for admin:', e);
       }
-    } catch (e) {
-      console.warn('Could not read organizations from Firestore, using registry cache:', e);
+
+      firestoreRecords = firestoreOrgs.map(fo => {
+        const ownerProf = profilesMap.get(fo.id);
+        const prCount = productsCountMap.get(fo.id) || 0;
+        const cachedMatch = cached.find(c => c.id === fo.id);
+
+        return {
+          id: fo.id,
+          nombre_negocio: fo.nombre_negocio || cachedMatch?.nombre_negocio || 'Comercio',
+          ownerName: fo.ownerName || ownerProf?.nombre || cachedMatch?.ownerName || 'Propietario',
+          ownerEmail: fo.ownerEmail || ownerProf?.email || cachedMatch?.ownerEmail || '',
+          ownerPhone: fo.telefono || cachedMatch?.ownerPhone || '',
+          plan_suscripcion: fo.plan_suscripcion || cachedMatch?.plan_suscripcion || 'gratuito',
+          subscriptionStatus: fo.subscriptionStatus || cachedMatch?.subscriptionStatus || 'active',
+          subscriptionExpiryDate: fo.subscriptionExpiryDate || cachedMatch?.subscriptionExpiryDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+          fecha_registro: fo.fecha_registro || cachedMatch?.fecha_registro || new Date().toISOString(),
+          productsCount: prCount || cachedMatch?.productsCount || 0,
+          ai_scans_used: typeof fo.ai_scans_used === 'number' ? fo.ai_scans_used : (cachedMatch?.ai_scans_used || 0),
+          logoUrl: fo.logoUrl || cachedMatch?.logoUrl,
+          paymentNotes: fo.paymentNotes || cachedMatch?.paymentNotes || ''
+        };
+      });
+    }
+  } catch (e) {
+    console.warn('Could not read organizations from Firestore, checking local storage:', e);
+  }
+
+  // Combine real Firestore records with cached genuine local records
+  const finalMap = new Map<string, OrganizationAdminRecord>();
+  cached.forEach(c => {
+    if (!LEGACY_DUMMY_IDS.includes(c.id)) finalMap.set(c.id, c);
+  });
+  firestoreRecords.forEach(fr => {
+    finalMap.set(fr.id, fr);
+  });
+
+  // If map is completely empty, check if active session has a real business
+  if (finalMap.size === 0) {
+    try {
+      const activeRaw = localStorage.getItem('bodega_active_session');
+      if (activeRaw) {
+        const s = JSON.parse(activeRaw);
+        if (s.organization && !LEGACY_DUMMY_IDS.includes(s.organization.id)) {
+          finalMap.set(s.organization.id, {
+            id: s.organization.id,
+            nombre_negocio: s.organization.nombre_negocio || 'Bodega William',
+            ownerName: s.profile?.nombre || 'Ing. William Cordovez',
+            ownerEmail: s.profile?.email || 'williamcordovezcn@gmail.com',
+            ownerPhone: s.organization.telefono || '+584241289468',
+            plan_suscripcion: s.organization.plan_suscripcion || 'pro',
+            subscriptionStatus: s.organization.subscriptionStatus || 'active',
+            subscriptionExpiryDate: s.organization.subscriptionExpiryDate || '2029-12-31',
+            fecha_registro: s.organization.fecha_registro || new Date().toISOString(),
+            productsCount: 0,
+            ai_scans_used: s.organization.ai_scans_used || 0,
+            paymentNotes: 'Cuenta Principal SaaS Master Admin'
+          });
+        }
+      }
+    } catch {
+      // ignore
     }
   }
 
-  // Update local storage cache
-  localStorage.setItem(SAAS_ORGANIZATIONS_REGISTRY_KEY, JSON.stringify(records));
-  return records;
+  const finalRecords = Array.from(finalMap.values());
+  localStorage.setItem(SAAS_ORGANIZATIONS_REGISTRY_KEY, JSON.stringify(finalRecords));
+  return finalRecords;
 }
 
 export async function updateOrganizationPlanAndStatus(
@@ -1485,7 +1465,7 @@ export async function updateOrganizationPlanAndStatus(
 ): Promise<void> {
   // Update local registry
   const raw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
-  let records: OrganizationAdminRecord[] = raw ? JSON.parse(raw) : [...INITIAL_SAAS_ORGANIZATIONS];
+  let records: OrganizationAdminRecord[] = raw ? JSON.parse(raw) : [];
   const idx = records.findIndex(r => r.id === orgId);
   if (idx >= 0) {
     records[idx] = { ...records[idx], ...updates };
@@ -1515,6 +1495,71 @@ export async function updateOrganizationPlanAndStatus(
     } catch (e) {
       console.warn('Failed to persist organization update to Firestore:', e);
     }
+  }
+}
+
+/**
+ * Permanently delete an organization and all its cascade records from Firestore and local storage.
+ */
+export async function deleteOrganizationCompletely(orgId: string): Promise<void> {
+  // 1. Remove from local storage registry & tenant caches
+  try {
+    const raw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
+    if (raw) {
+      const list = (JSON.parse(raw) as OrganizationAdminRecord[]).filter(r => r.id !== orgId);
+      localStorage.setItem(SAAS_ORGANIZATIONS_REGISTRY_KEY, JSON.stringify(list));
+    }
+
+    const tenantKeys = [
+      `bodega_${orgId}_products`,
+      `bodega_${orgId}_customers`,
+      `bodega_${orgId}_sales`,
+      `bodega_${orgId}_ledger`,
+      `bodega_${orgId}_settings`,
+      `bodega_${orgId}_collaborators`,
+      `bodega_${orgId}_ai_scans_count`
+    ];
+    tenantKeys.forEach(k => localStorage.removeItem(k));
+
+    const activeRaw = localStorage.getItem('bodega_active_session');
+    if (activeRaw) {
+      const session = JSON.parse(activeRaw);
+      if (session?.organization?.id === orgId) {
+        localStorage.removeItem('bodega_active_session');
+      }
+    }
+  } catch (e) {
+    console.warn('Error clearing local organization cache:', e);
+  }
+
+  // 2. Cascade delete from Firestore
+  try {
+    // Delete organization document
+    await deleteDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId));
+    // Delete settings document
+    await deleteDoc(doc(db, 'settings', orgId));
+
+    // Delete products with organization_id === orgId
+    const prodSnap = await getDocs(query(collection(db, PRODUCTS_COLLECTION), where('organization_id', '==', orgId)));
+    await Promise.all(prodSnap.docs.map(d => deleteDoc(d.ref)));
+
+    // Delete customers with organization_id === orgId
+    const custSnap = await getDocs(query(collection(db, CUSTOMERS_COLLECTION), where('organization_id', '==', orgId)));
+    await Promise.all(custSnap.docs.map(d => deleteDoc(d.ref)));
+
+    // Delete sales with organization_id === orgId
+    const salesSnap = await getDocs(query(collection(db, SALES_COLLECTION), where('organization_id', '==', orgId)));
+    await Promise.all(salesSnap.docs.map(d => deleteDoc(d.ref)));
+
+    // Delete ledger with organization_id === orgId
+    const ledgerSnap = await getDocs(query(collection(db, LEDGER_COLLECTION), where('organization_id', '==', orgId)));
+    await Promise.all(ledgerSnap.docs.map(d => deleteDoc(d.ref)));
+
+    // Delete profiles with organization_id === orgId
+    const profSnap = await getDocs(query(collection(db, PROFILES_COLLECTION), where('organization_id', '==', orgId)));
+    await Promise.all(profSnap.docs.map(d => deleteDoc(d.ref)));
+  } catch (e) {
+    console.warn('Error cascade deleting organization documents from Firestore:', e);
   }
 }
 

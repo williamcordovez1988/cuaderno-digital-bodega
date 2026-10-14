@@ -3,7 +3,8 @@ import { OrganizationAdminRecord, PLAN_PRICING } from '../firebase/types';
 import {
   getAllOrganizationsForAdmin,
   updateOrganizationPlanAndStatus,
-  createManualOrganization
+  createManualOrganization,
+  deleteOrganizationCompletely
 } from '../firebase/firestoreService';
 
 interface MasterAdminViewProps {
@@ -30,6 +31,9 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
   const [modalExpiryDate, setModalExpiryDate] = useState<string>('');
   const [modalStatus, setModalStatus] = useState<'active' | 'paused' | 'expired'>('active');
   const [modalNotes, setModalNotes] = useState<string>('');
+
+  const [deletingOrg, setDeletingOrg] = useState<OrganizationAdminRecord | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [newBizName, setNewBizName] = useState<string>('');
@@ -58,24 +62,20 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
     loadOrgs();
   }, []);
 
-  // Quick Plan Activation (1-Click)
+  // Quick Plan Activation (1-Click) with Mensual (+30d) or Anual (+365d)
   const handleQuickChangePlan = async (
     org: OrganizationAdminRecord,
-    newPlanName: 'gratuito' | 'pro' | 'premium'
+    newPlanName: 'gratuito' | 'pro' | 'premium',
+    durationDays: number = 30
   ) => {
-    if (org.plan_suscripcion === newPlanName) {
-      onShowToast(`El negocio ya cuenta con el ${newPlanName.toUpperCase()}`, 'info');
-      return;
-    }
-
     try {
-      // Extend expiration by 30 days if upgrading
-      const newExpiry = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+      const newExpiry = new Date(Date.now() + durationDays * 86400000).toISOString().split('T')[0];
+      const cycleLabel = durationDays === 365 ? 'ANUAL' : 'MENSUAL';
       const updates = {
         plan_suscripcion: newPlanName,
         subscriptionStatus: 'active' as const,
         subscriptionExpiryDate: newExpiry,
-        paymentNotes: `Plan ${newPlanName.toUpperCase()} activado por Super Admin el ${new Date().toLocaleDateString('es-VE')}`
+        paymentNotes: `Plan ${newPlanName.toUpperCase()} (${cycleLabel}) activado por Super Admin el ${new Date().toLocaleDateString('es-VE')}`
       };
 
       await updateOrganizationPlanAndStatus(org.id, updates);
@@ -85,7 +85,7 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
       );
 
       onShowToast(
-        `¡${org.nombre_negocio} actualizado a ${newPlanName.toUpperCase()} exitosamente!`,
+        `¡${org.nombre_negocio} actualizado a ${newPlanName.toUpperCase()} (${cycleLabel}) exitosamente!`,
         'verified'
       );
     } catch (e) {
@@ -109,6 +109,45 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
     } catch (e) {
       console.error(e);
       onShowToast('Error al modificar estado', 'error');
+    }
+  };
+
+  // Send WhatsApp Expiry Reminder
+  const handleSendExpiryReminder = (org: OrganizationAdminRecord) => {
+    const cleanPhone = (org.ownerPhone || org.telefono || '').replace(/[^0-9]/g, '');
+    if (!cleanPhone) {
+      onShowToast(`"${org.nombre_negocio}" no tiene un número de teléfono registrado`, 'warning');
+      return;
+    }
+    const ownerName = org.ownerName?.trim() || 'Estimado(a)';
+    const isPremium = org.plan_suscripcion === 'premium';
+    const isPro = org.plan_suscripcion === 'pro';
+    const planName = isPremium ? 'Premium VIP' : isPro ? 'Pro' : 'de Suscripción';
+    const expiryDateStr = org.subscriptionExpiryDate
+      ? new Date(org.subscriptionExpiryDate + 'T12:00:00').toLocaleDateString('es-VE')
+      : 'próximamente';
+
+    const message = `Hola ${ownerName}, te saludamos de Cuaderno Digital Bodega. Te recordamos que tu Plan ${planName} vence el ${expiryDateStr}. Renueva hoy para mantener tu inventario e IA sin interrupciones.`;
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+    onShowToast(`Abriendo WhatsApp con recordatorio para ${org.nombre_negocio}...`, 'chat');
+  };
+
+  // Permanent Delete Client Handler
+  const handleConfirmDelete = async () => {
+    if (!deletingOrg) return;
+    setIsSubmitting(true);
+    try {
+      await deleteOrganizationCompletely(deletingOrg.id);
+      setOrganizations((prev) => prev.filter((o) => o.id !== deletingOrg.id));
+      setIsDeleteModalOpen(false);
+      onShowToast(`Negocio "${deletingOrg.nombre_negocio}" eliminado definitivamente de la base de datos`, 'delete_forever');
+      setDeletingOrg(null);
+    } catch (e) {
+      console.error(e);
+      onShowToast('Error al eliminar cliente', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -673,50 +712,80 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
                           </span>
                         </td>
 
-                        {/* Vencimiento */}
+                        {/* Vencimiento & Recordatorios */}
                         <td className="py-3.5 px-4">
-                          <div className="flex flex-col">
-                            <span className="font-numeric-tally font-bold text-[11px] text-[#111c2d]">
-                              {org.subscriptionExpiryDate || 'Sin definir'}
-                            </span>
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-gray-500 font-medium">Vence:</span>
+                              <strong className="font-numeric-tally font-extrabold text-[11px] text-[#111c2d]">
+                                {org.subscriptionExpiryDate ? new Date(org.subscriptionExpiryDate + 'T12:00:00').toLocaleDateString('es-VE') : 'Sin definir'}
+                              </strong>
+                            </div>
                             <span className="text-[10px] text-gray-500">
-                              Reg: {new Date(org.fecha_registro).toLocaleDateString('es-VE')}
+                              Inscrito: {new Date(org.fecha_registro).toLocaleDateString('es-VE')}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => handleSendExpiryReminder(org)}
+                              title="Enviar recordatorio de vencimiento por WhatsApp al dueño"
+                              className="mt-1 px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-300 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95 w-fit"
+                            >
+                              <span className="material-symbols-outlined text-[12px]">schedule_send</span>
+                              <span>📲 Enviar Recordatorio</span>
+                            </button>
                           </div>
                         </td>
 
                         {/* Acciones Rápidas (1 Clic) */}
                         <td className="py-3.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                          <div className="flex items-center justify-center gap-1 flex-wrap max-w-[210px] mx-auto">
                             
-                            {/* Cambiar a Pro */}
+                            {/* Cambiar a Pro (Mensual / Anual) */}
                             {!isPro && (
-                              <button
-                                onClick={() => handleQuickChangePlan(org, 'pro')}
-                                title="Cambiar a Plan Pro ($9.99/mes)"
-                                className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-500 text-amber-800 hover:text-white text-[10px] font-bold border border-amber-300 transition-all cursor-pointer active:scale-95 flex items-center gap-0.5"
-                              >
-                                <span className="material-symbols-outlined text-[12px]">star</span>
-                                A Pro
-                              </button>
+                              <div className="inline-flex rounded-lg shadow-2xs">
+                                <button
+                                  onClick={() => handleQuickChangePlan(org, 'pro', 30)}
+                                  title="Activar Plan Pro Mensual (+30 días)"
+                                  className="px-1.5 py-1 rounded-l-lg bg-amber-50 hover:bg-amber-500 text-amber-800 hover:text-white text-[10px] font-bold border border-amber-300 transition-all cursor-pointer active:scale-95 flex items-center gap-0.5"
+                                >
+                                  <span className="material-symbols-outlined text-[11px]">star</span>
+                                  Pro (30d)
+                                </button>
+                                <button
+                                  onClick={() => handleQuickChangePlan(org, 'pro', 365)}
+                                  title="Activar Plan Pro Anual (+365 días)"
+                                  className="px-1.5 py-1 rounded-r-lg bg-amber-100 hover:bg-amber-600 text-amber-900 hover:text-white text-[10px] font-black border-y border-r border-amber-300 transition-all cursor-pointer active:scale-95"
+                                >
+                                  1 Año
+                                </button>
+                              </div>
                             )}
 
-                            {/* Cambiar a Premium */}
+                            {/* Cambiar a Premium (Mensual / Anual) */}
                             {!isPremium && (
-                              <button
-                                onClick={() => handleQuickChangePlan(org, 'premium')}
-                                title="Cambiar a Plan Premium VIP ($19.99/mes)"
-                                className="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-600 text-purple-800 hover:text-white text-[10px] font-bold border border-purple-300 transition-all cursor-pointer active:scale-95 flex items-center gap-0.5"
-                              >
-                                <span className="material-symbols-outlined text-[12px]">workspace_premium</span>
-                                A Premium
-                              </button>
+                              <div className="inline-flex rounded-lg shadow-2xs">
+                                <button
+                                  onClick={() => handleQuickChangePlan(org, 'premium', 30)}
+                                  title="Activar Plan Premium Mensual (+30 días)"
+                                  className="px-1.5 py-1 rounded-l-lg bg-purple-50 hover:bg-purple-600 text-purple-800 hover:text-white text-[10px] font-bold border border-purple-300 transition-all cursor-pointer active:scale-95 flex items-center gap-0.5"
+                                >
+                                  <span className="material-symbols-outlined text-[11px]">workspace_premium</span>
+                                  VIP (30d)
+                                </button>
+                                <button
+                                  onClick={() => handleQuickChangePlan(org, 'premium', 365)}
+                                  title="Activar Plan Premium Anual (+365 días)"
+                                  className="px-1.5 py-1 rounded-r-lg bg-purple-100 hover:bg-purple-700 text-purple-900 hover:text-white text-[10px] font-black border-y border-r border-purple-300 transition-all cursor-pointer active:scale-95"
+                                >
+                                  1 Año
+                                </button>
+                              </div>
                             )}
 
                             {/* Bajar a Gratuito */}
                             {!isGratuito && (
                               <button
-                                onClick={() => handleQuickChangePlan(org, 'gratuito')}
+                                onClick={() => handleQuickChangePlan(org, 'gratuito', 30)}
                                 title="Degradar a Plan Gratuito"
                                 className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-600 text-gray-700 hover:text-white text-[10px] font-bold transition-all cursor-pointer active:scale-95"
                               >
@@ -731,6 +800,19 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
                               className="p-1 rounded-lg bg-[#f0f3ff] hover:bg-[#8d4b00] text-[#554336] hover:text-white transition-all cursor-pointer flex items-center justify-center"
                             >
                               <span className="material-symbols-outlined text-[15px]">edit_calendar</span>
+                            </button>
+
+                            {/* Delete Client Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeletingOrg(org);
+                                setIsDeleteModalOpen(true);
+                              }}
+                              title="Eliminar cliente y todos sus datos de la base de datos"
+                              className="p-1 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                            >
+                              <span className="material-symbols-outlined text-[15px]">delete_forever</span>
                             </button>
 
                           </div>
@@ -1027,6 +1109,79 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
               </div>
 
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: CONFIRMACIÓN DE ELIMINACIÓN DE CLIENTE (BORRADOR DEFINITIVO)
+          ========================================================================= */}
+      {isDeleteModalOpen && deletingOrg && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-rose-200 relative animate-in zoom-in-95 duration-150">
+            <button
+              onClick={() => {
+                setIsDeleteModalOpen(false);
+                setDeletingOrg(null);
+              }}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-lg cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <div className="flex items-center gap-3.5 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[30px]">warning</span>
+              </div>
+              <div>
+                <h3 className="text-base font-black text-[#111c2d]">
+                  ¿Eliminar negocio y todos sus datos?
+                </h3>
+                <p className="text-xs text-rose-600 font-bold">
+                  Acción irreversible • Borrado definitivo
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200/80 mb-5 text-xs text-[#554336] space-y-2">
+              <p>
+                Estás a punto de eliminar a <strong className="text-[#111c2d] font-black">{deletingOrg.nombre_negocio}</strong> ({deletingOrg.ownerEmail || 'Sin correo'}).
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-[11px] text-rose-800">
+                <li>Se borrará la organización de Firestore y registros locales.</li>
+                <li>Se eliminarán todos sus <strong>productos del inventario</strong>.</li>
+                <li>Se borrarán los <strong>clientes, fiados y cuentas por cobrar</strong>.</li>
+                <li>Se eliminarán las <strong>ventas y cierres de caja</strong>.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#f0ebe3]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setDeletingOrg(null);
+                }}
+                disabled={isSubmitting}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-[#554336] hover:bg-[#FAF8F5] transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isSubmitting}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+              >
+                {isSubmitting ? (
+                  <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>
+                ) : (
+                  <span className="material-symbols-outlined text-[16px]">delete_forever</span>
+                )}
+                <span>Sí, Eliminar Definitivamente</span>
+              </button>
+            </div>
 
           </div>
         </div>

@@ -17,8 +17,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onShowToast,
   bcvRate = 877.90
 }) => {
-  // Subscription Plan selection for checkout ('pro' or 'premium')
+  // Subscription Plan selection for checkout ('pro' or 'premium') and Billing Cycle ('monthly' or 'annual')
   const [selectedPlan, setSelectedPlan] = useState<'pro' | 'premium'>('pro');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
 
   // Direct Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -33,15 +34,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   // Mobile navigation menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Open modal with specific plan
-  const openPaymentModal = (plan: 'pro' | 'premium' = 'pro') => {
+  // Open modal with specific plan and billing cycle
+  const openPaymentModal = (plan: 'pro' | 'premium' = 'pro', cycle?: 'monthly' | 'annual') => {
     setSelectedPlan(plan);
+    if (cycle) setBillingCycle(cycle);
     setIsPaymentModalOpen(true);
   };
 
-  // Helper calculations for current plan
-  const currentPlanName = selectedPlan === 'premium' ? 'Plan Premium ($19.99 / mes)' : 'Plan Pro ($9.99 / mes)';
-  const currentPlanPriceUSD = selectedPlan === 'premium' ? 19.99 : 9.99;
+  // Helper calculations for current plan and annual promotion (2 Meses Gratis)
+  const isAnnual = billingCycle === 'annual';
+  const currentPlanPriceUSD = selectedPlan === 'premium'
+    ? (isAnnual ? 200.00 : 19.99)
+    : (isAnnual ? 100.00 : 9.99);
+
+  const currentPlanName = selectedPlan === 'premium'
+    ? (isAnnual ? 'Plan Premium VIP Anual ($200 / Año - 2 Meses Gratis 🎁)' : 'Plan Premium VIP Mensual ($19.99 / mes)')
+    : (isAnnual ? 'Plan Pro Anual ($100 / Año - 2 Meses Gratis 🎁)' : 'Plan Pro Mensual ($9.99 / mes)');
+
   const currentPlanPriceBs = (currentPlanPriceUSD * bcvRate).toFixed(2);
 
   // Copy to clipboard helper
@@ -57,7 +66,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   // WhatsApp Payment Confirmation Notification (+584241289468)
   const handleReportPaymentWhatsApp = () => {
     const adminPhone = '584241289468'; // Número de WhatsApp oficial del Administrador
-    const planLabel = selectedPlan === 'premium' ? 'Plan Premium' : 'Plan Pro';
+    const planLabel = selectedPlan === 'premium' ? 'Plan Premium VIP' : 'Plan Pro';
+    const periodLabel = isAnnual ? `Anual ($${currentPlanPriceUSD.toFixed(2)})` : `Mensual ($${currentPlanPriceUSD.toFixed(2)})`;
     const storeLabel = reportStoreName.trim() || 'Mi Negocio';
     const methodNames = {
       pago_movil: 'Pago Móvil / Banco Mercantil (0105)',
@@ -66,12 +76,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     };
     const methodName = methodNames[selectedPaymentTab];
 
-    const message = `Hola Ing. William, he realizado el pago para activar el ${planLabel} en mi negocio ${storeLabel}. Adjunto mi comprobante.${
+    const message = `Hola Ing. William, he realizado el pago para activar el ${planLabel} ${periodLabel} en mi negocio ${storeLabel}. Adjunto mi comprobante.${
       reportRefNumber.trim() ? ` (Ref: ${reportRefNumber.trim()})` : ''
     }
 
 📋 *Detalles de la Suscripción:*
 • *Plan:* ${currentPlanName}
+• *Periodo:* ${isAnnual ? 'Facturación Anual (Ahorro de 2 Meses Gratis 🎁)' : 'Facturación Mensual'}
+• *Monto a Pagar:* $${currentPlanPriceUSD.toFixed(2)} USD (≈ Bs. ${Number(currentPlanPriceBs).toLocaleString('es-VE', { minimumFractionDigits: 2 })})
 • *Negocio:* ${storeLabel}
 • *Método de Pago:* ${methodName}${reportUserEmail.trim() ? `\n• *Correo de Usuario:* ${reportUserEmail.trim()}` : ''}${reportRefNumber.trim() ? `\n• *Referencia / Comprobante:* ${reportRefNumber.trim()}` : ''}
 
@@ -738,6 +750,46 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
             </p>
           </div>
 
+          {/* Selector / Toggle: Facturación Mensual vs Facturación Anual (2 Meses Gratis) */}
+          <div className="flex flex-col items-center justify-center gap-2.5 -mt-6">
+            <div className="inline-flex items-center p-1.5 rounded-2xl bg-[#FAF8F5] border border-[#dbc2b0]/50 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setBillingCycle('monthly')}
+                className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+                  billingCycle === 'monthly'
+                    ? 'bg-[#111c2d] text-white shadow-sm'
+                    : 'text-[#554336] hover:text-[#111c2d]'
+                }`}
+              >
+                Facturación Mensual
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingCycle('annual')}
+                className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
+                  billingCycle === 'annual'
+                    ? 'bg-[#8d4b00] text-white shadow-sm'
+                    : 'text-[#554336] hover:text-[#8d4b00]'
+                }`}
+              >
+                <span>Facturación Anual</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider shadow-2xs animate-pulse">
+                  Ahorra 2 Meses 🎁
+                </span>
+              </button>
+            </div>
+            <p className="text-xs text-[#554336] font-medium text-center">
+              {billingCycle === 'annual' ? (
+                <span className="text-[#006c4a] font-bold">
+                  ✓ Pagas 10 meses y recibes 12 meses completos de servicio ininterrumpido.
+                </span>
+              ) : (
+                <span>Sin contratos forzosos. Puedes cambiar o cancelar cuando desees.</span>
+              )}
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto items-stretch">
             
             {/* Plan 1: Plan Gratuito ($0 / mes) */}
@@ -757,7 +809,7 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
 
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl font-black text-[#111c2d] font-heading">$0</span>
-                  <span className="text-xs font-bold text-[#554336]">/ mes (Para siempre)</span>
+                  <span className="text-xs font-bold text-[#554336]">/ siempre (Sin tarjeta)</span>
                 </div>
 
                 <div className="space-y-3 pt-2 text-xs text-[#111c2d]">
@@ -799,17 +851,17 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
               </div>
             </div>
 
-            {/* Plan 2: Plan Pro ($9.99 / mes) — 'Más Popular' */}
+            {/* Plan 2: Plan Pro ($9.99 / mes o $100 / año) — 'Más Popular' */}
             <div className="p-8 rounded-3xl bg-white border-2 border-[#8d4b00] flex flex-col justify-between shadow-xl relative overflow-hidden ring-4 ring-[#ffdcc3]/50">
               {/* Highlight ribbon */}
               <div className="absolute top-0 right-0 bg-[#8d4b00] text-white text-[10px] font-black uppercase tracking-wider py-1.5 px-8 rotate-45 translate-x-7 translate-y-3 shadow-xs">
-                Más Popular
+                {billingCycle === 'annual' ? 'AHORRA $20' : 'Más Popular'}
               </div>
 
               <div className="space-y-6">
                 <div>
                   <span className="px-3 py-1 rounded-full bg-[#ffdcc3] text-[#8d4b00] text-[11px] font-black uppercase tracking-wider">
-                    Más Popular
+                    {billingCycle === 'annual' ? 'Plan Anual Promocional' : 'Más Popular'}
                   </span>
                   <h3 className="text-2xl font-heading font-black text-[#111c2d] mt-2">
                     Plan Pro
@@ -819,10 +871,23 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                   </p>
                 </div>
 
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-[#8d4b00] font-heading">$9.99</span>
-                  <span className="text-xs font-bold text-[#554336]">/ mes</span>
-                </div>
+                {billingCycle === 'annual' ? (
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-4xl font-black text-[#8d4b00] font-heading">$100</span>
+                      <span className="text-xs font-bold text-[#554336]">/ año</span>
+                      <span className="text-sm font-bold text-gray-400 line-through ml-1">$120</span>
+                    </div>
+                    <div className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#006c4a] text-[11px] font-black">
+                      ¡Ahorras $20! (Equiv. a $8.33 / mes)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-[#8d4b00] font-heading">$9.99</span>
+                    <span className="text-xs font-bold text-[#554336]">/ mes</span>
+                  </div>
+                )}
 
                 <div className="space-y-3 pt-2 text-xs text-[#111c2d]">
                   <div className="flex items-center gap-2">
@@ -859,26 +924,26 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
               <div className="pt-8">
                 <button
                   type="button"
-                  onClick={() => openPaymentModal('pro')}
+                  onClick={() => openPaymentModal('pro', billingCycle)}
                   className="w-full py-4 px-4 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white font-black text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
                   <span className="material-symbols-outlined text-[20px]">workspace_premium</span>
-                  Suscribirme a Pro
+                  {billingCycle === 'annual' ? 'Suscribirme a Pro Anual ($100)' : 'Suscribirme a Pro ($9.99/mes)'}
                 </button>
               </div>
             </div>
 
-            {/* Plan 3: Plan Premium ($19.99 / mes) — 'Sin Límites VIP' */}
+            {/* Plan 3: Plan Premium ($19.99 / mes o $200 / año) — 'Sin Límites VIP' */}
             <div className="p-8 rounded-3xl bg-gradient-to-b from-[#FAF8F5] via-white to-white border-2 border-[#111c2d] flex flex-col justify-between shadow-xl relative overflow-hidden">
               {/* Highlight ribbon */}
               <div className="absolute top-0 right-0 bg-[#111c2d] text-[#ffdcc3] text-[10px] font-black uppercase tracking-wider py-1.5 px-8 rotate-45 translate-x-7 translate-y-3 shadow-xs">
-                VIP
+                {billingCycle === 'annual' ? 'AHORRA $40' : 'VIP'}
               </div>
 
               <div className="space-y-6">
                 <div>
                   <span className="px-3 py-1 rounded-full bg-[#111c2d] text-[#ffdcc3] text-[11px] font-black uppercase tracking-wider">
-                    Sin Límites VIP
+                    {billingCycle === 'annual' ? 'VIP Anual Promocional' : 'Sin Límites VIP'}
                   </span>
                   <h3 className="text-2xl font-heading font-black text-[#111c2d] mt-2">
                     Plan Premium
@@ -888,10 +953,23 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                   </p>
                 </div>
 
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-[#111c2d] font-heading">$19.99</span>
-                  <span className="text-xs font-bold text-[#554336]">/ mes</span>
-                </div>
+                {billingCycle === 'annual' ? (
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-4xl font-black text-[#111c2d] font-heading">$200</span>
+                      <span className="text-xs font-bold text-[#554336]">/ año</span>
+                      <span className="text-sm font-bold text-gray-400 line-through ml-1">$240</span>
+                    </div>
+                    <div className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#006c4a] text-[11px] font-black">
+                      ¡Ahorras $40! (Equiv. a $16.66 / mes)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-[#111c2d] font-heading">$19.99</span>
+                    <span className="text-xs font-bold text-[#554336]">/ mes</span>
+                  </div>
+                )}
 
                 <div className="space-y-3 pt-2 text-xs text-[#111c2d]">
                   <div className="flex items-center gap-2">
@@ -928,11 +1006,11 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
               <div className="pt-8">
                 <button
                   type="button"
-                  onClick={() => openPaymentModal('premium')}
+                  onClick={() => openPaymentModal('premium', billingCycle)}
                   className="w-full py-4 px-4 rounded-xl bg-[#111c2d] hover:bg-[#203350] text-[#ffdcc3] font-black text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
                   <span className="material-symbols-outlined text-[20px]">diamond</span>
-                  Obtener Premium
+                  {billingCycle === 'annual' ? 'Obtener Premium Anual ($200)' : 'Obtener Premium ($19.99/mes)'}
                 </button>
               </div>
             </div>
@@ -961,11 +1039,43 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
           {/* Payment Card Container */}
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8E2D8] shadow-lg space-y-6">
             
-            {/* Step 1: Selector of Plan to Pay */}
-            <div>
-              <label className="block text-xs font-black text-[#554336] uppercase tracking-wider mb-2">
-                1. Selecciona el Plan que deseas activar:
-              </label>
+            {/* Step 1: Selector of Plan and Billing Cycle to Pay */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="text-xs font-black text-[#554336] uppercase tracking-wider">
+                  1. Selecciona el Plan y Modalidad de Pago:
+                </label>
+                
+                {/* Billing Cycle Toggle */}
+                <div className="inline-flex p-1 bg-[#FAF8F5] rounded-xl border border-[#dbc2b0]/50 text-xs font-bold self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setBillingCycle('monthly')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      billingCycle === 'monthly'
+                        ? 'bg-[#111c2d] text-white shadow-xs'
+                        : 'text-[#554336] hover:text-[#111c2d]'
+                    }`}
+                  >
+                    Mensual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBillingCycle('annual')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                      billingCycle === 'annual'
+                        ? 'bg-[#8d4b00] text-white shadow-xs'
+                        : 'text-[#554336] hover:text-[#8d4b00]'
+                    }`}
+                  >
+                    <span>Anual</span>
+                    <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-white text-[9px] font-black uppercase">
+                      🎁 2 Meses Gratis
+                    </span>
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3 p-1.5 bg-[#FAF8F5] rounded-2xl border border-[#dbc2b0]/40">
                 <button
                   type="button"
@@ -980,7 +1090,7 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                     ⭐ Plan Pro
                   </span>
                   <span className="text-[11px] opacity-90 font-mono">
-                    ($9.99 / mes)
+                    {billingCycle === 'annual' ? '($100 / Año)' : '($9.99 / mes)'}
                   </span>
                 </button>
 
@@ -997,10 +1107,19 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                     💎 Plan Premium
                   </span>
                   <span className="text-[11px] opacity-90 font-mono">
-                    ($19.99 / mes)
+                    {billingCycle === 'annual' ? '($200 / Año)' : '($19.99 / mes)'}
                   </span>
                 </button>
               </div>
+
+              {billingCycle === 'annual' && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between">
+                  <span>🎁 <strong>Promoción Anual Activada:</strong> Disfrutas 12 meses pagando únicamente 10.</span>
+                  <span className="font-extrabold text-[11px] bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                    {selectedPlan === 'pro' ? 'Ahorras $20' : 'Ahorras $40'}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Step 2: Tabs for Payment Methods */}
@@ -1332,7 +1451,9 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                     💳 {selectedPlan === 'premium' ? 'Activar Plan Premium' : 'Activar Plan Pro'}
                   </h3>
                   <p className="text-xs opacity-90">
-                    {selectedPlan === 'premium' ? 'Sin Límites VIP • $19.99 / mes' : 'Más Popular • $9.99 / mes'}
+                    {selectedPlan === 'premium'
+                      ? (billingCycle === 'annual' ? 'Sin Límites VIP • $200 / Año (¡2 Meses Gratis!)' : 'Sin Límites VIP • $19.99 / mes')
+                      : (billingCycle === 'annual' ? 'Más Popular • $100 / Año (¡2 Meses Gratis!)' : 'Más Popular • $9.99 / mes')}
                   </p>
                 </div>
               </div>
@@ -1348,6 +1469,32 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
 
             {/* Modal Body */}
             <div className="p-6 space-y-4 max-h-[82vh] overflow-y-auto">
+
+              {/* Billing Cycle Selector inside modal */}
+              <div className="flex items-center justify-center gap-1.5 p-1 bg-[#FAF8F5] rounded-xl border border-[#dbc2b0]/30 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle('monthly')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all cursor-pointer ${
+                    billingCycle === 'monthly'
+                      ? 'bg-white text-[#111c2d] shadow-xs'
+                      : 'text-[#554336] hover:text-[#111c2d]'
+                  }`}
+                >
+                  🗓️ Facturación Mensual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle('annual')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    billingCycle === 'annual'
+                      ? 'bg-[#006c4a] text-white shadow-xs'
+                      : 'text-[#006c4a] hover:bg-[#006c4a]/10'
+                  }`}
+                >
+                  <span>🎁 Facturación Anual (-17%)</span>
+                </button>
+              </div>
               
               {/* Plan Switcher inside modal */}
               <div className="grid grid-cols-2 gap-2 p-1 bg-[#FAF8F5] rounded-xl border border-[#dbc2b0]/30 text-xs font-bold">
@@ -1361,7 +1508,9 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                   }`}
                 >
                   <span>⭐ Plan Pro</span>
-                  <span className="font-mono text-[10px] opacity-80">($9.99)</span>
+                  <span className="font-mono text-[10px] opacity-80">
+                    ({billingCycle === 'annual' ? '$100/año' : '$9.99/mes'})
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -1373,7 +1522,9 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                   }`}
                 >
                   <span>💎 Plan VIP</span>
-                  <span className="font-mono text-[10px] opacity-80">($19.99)</span>
+                  <span className="font-mono text-[10px] opacity-80">
+                    ({billingCycle === 'annual' ? '$200/año' : '$19.99/mes'})
+                  </span>
                 </button>
               </div>
 
