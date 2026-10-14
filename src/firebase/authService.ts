@@ -82,10 +82,11 @@ export async function getOrCreateWilliamSession(): Promise<AuthSession> {
 
   const initialSettings: BodegaSettings = {
     organization_id: orgId,
-    bcvExchangeRate: 65.0,
+    bcvExchangeRate: 877.90,
     bodegaName: DEFAULT_CREDENTIALS.businessName,
     cashierName: DEFAULT_CREDENTIALS.userName,
-    lastUpdated: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }),
+    lastUpdated: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    lastExchangeRateUpdate: 'Inicial (877.90 Bs/USD)',
     pagoMovilPhone: DEFAULT_CREDENTIALS.phone,
     pagoMovilBank: '0102 - Banco de Venezuela',
     pagoMovilCI: 'V-12345678',
@@ -175,10 +176,11 @@ export async function registerBusiness({
     // 4. Create clean initial settings for the organization (blank canvas)
     const initialSettings: BodegaSettings = {
       organization_id: orgId,
-      bcvExchangeRate: 65.0,
+      bcvExchangeRate: 877.90,
       bodegaName: nombreNegocio.trim(),
       cashierName: nombreUsuario.trim() || 'Caja Principal',
-      lastUpdated: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }),
+      lastUpdated: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      lastExchangeRateUpdate: 'Inicial (877.90 Bs/USD)',
       pagoMovilPhone: '',
       pagoMovilBank: '',
       pagoMovilCI: ''
@@ -388,10 +390,11 @@ export async function createProfileForExistingUser(
 
   const initialSettings: BodegaSettings = {
     organization_id: orgId,
-    bcvExchangeRate: 65.0,
+    bcvExchangeRate: 877.90,
     bodegaName: bName,
     cashierName: user.displayName || 'Caja Principal',
-    lastUpdated: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }),
+    lastUpdated: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    lastExchangeRateUpdate: 'Inicial (877.90 Bs/USD)',
     pagoMovilPhone: '',
     pagoMovilBank: '',
     pagoMovilCI: ''

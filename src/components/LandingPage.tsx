@@ -15,7 +15,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   currentUser,
   userProfile,
   onShowToast,
-  bcvRate = 65.40
+  bcvRate = 877.90
 }) => {
   // Subscription Plan selection for checkout ('pro' or 'premium')
   const [selectedPlan, setSelectedPlan] = useState<'pro' | 'premium'>('pro');

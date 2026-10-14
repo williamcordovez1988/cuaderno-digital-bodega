@@ -8,6 +8,8 @@ interface HeaderProps {
   setCurrentTab: (tab: 'registro' | 'cuentas' | 'inventario' | 'historial' | 'configuracion') => void;
   settings: BodegaSettings;
   onUpdateExchangeRate: (newRate: number) => void;
+  onFetchExchangeRateNow?: () => Promise<void>;
+  isFetchingRate?: boolean;
   pendingDebtsCount: number;
   totalProductsCount: number;
   todaySalesUSD: number;
@@ -24,6 +26,8 @@ export const Header: React.FC<HeaderProps> = ({
   setCurrentTab,
   settings,
   onUpdateExchangeRate,
+  onFetchExchangeRateNow,
+  isFetchingRate = false,
   pendingDebtsCount,
   totalProductsCount,
   todaySalesUSD,
@@ -38,6 +42,10 @@ export const Header: React.FC<HeaderProps> = ({
   const [rateInput, setRateInput] = useState(settings.bcvExchangeRate.toFixed(2));
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isMobileDropdownOpen, setIsMobileDropdownOpen] = useState(false);
+
+  React.useEffect(() => {
+    setRateInput(settings.bcvExchangeRate.toFixed(2));
+  }, [settings.bcvExchangeRate]);
 
   const userRole = userProfile?.rol || 'dueño';
   const isUserOwner = isOwner(userRole);
@@ -209,17 +217,22 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2 sm:gap-3">
             
             {/* Tasa BCV Widget */}
-            <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#f0f3ff] border border-[#dbc2b0]/30 text-[#111c2d]">
+            <div className="flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 rounded-xl bg-[#f0f3ff] border border-[#dbc2b0]/40 text-[#111c2d] shadow-2xs">
               <div className="flex flex-col text-left">
-                <span className="text-[9px] sm:text-[10px] font-bold text-[#554336] uppercase tracking-wider">Tasa BCV</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-[12px]">💵</span>
+                  <span className="text-[9px] sm:text-[10px] font-black text-[#554336] uppercase tracking-wider">
+                    Tasa BCV
+                  </span>
+                </div>
                 {isEditingRate ? (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 mt-0.5">
                     <input
                       type="number"
                       step="0.05"
                       value={rateInput}
                       onChange={(e) => setRateInput(e.target.value)}
-                      className="w-14 sm:w-16 px-1 py-0.5 text-xs font-bold bg-white rounded border border-[#8d4b00] focus:outline-none"
+                      className="w-16 sm:w-20 px-1.5 py-0.5 text-xs font-bold bg-white rounded border border-[#8d4b00] focus:outline-none"
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleSaveRate();
@@ -227,31 +240,64 @@ export const Header: React.FC<HeaderProps> = ({
                       }}
                     />
                     <button
+                      type="button"
                       onClick={handleSaveRate}
-                      className="w-5 h-5 rounded bg-[#8d4b00] text-white flex items-center justify-center text-xs cursor-pointer"
-                      title="Guardar"
+                      className="w-5 h-5 rounded bg-[#8d4b00] text-white flex items-center justify-center text-xs cursor-pointer hover:bg-[#b15f00]"
+                      title="Guardar Tasa"
                     >
                       ✓
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingRate(false)}
+                      className="w-5 h-5 rounded bg-gray-200 text-gray-700 flex items-center justify-center text-xs cursor-pointer hover:bg-gray-300"
+                      title="Cancelar"
+                    >
+                      ✕
+                    </button>
                   </div>
                 ) : (
-                  <span className="text-xs sm:text-sm font-extrabold text-[#111c2d] font-numeric-tally">
-                    {settings.bcvExchangeRate.toFixed(2)} Bs/$
-                  </span>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-xs sm:text-sm font-extrabold text-[#111c2d] font-numeric-tally">
+                      {settings.bcvExchangeRate.toFixed(2)} <span className="text-[10px] text-[#554336] font-semibold">Bs/USD</span>
+                    </span>
+                    <span className="text-[9px] text-[#554336]/80 hidden md:inline">
+                      (Actualizado: {settings.lastExchangeRateUpdate || settings.lastUpdated || 'Reciente'})
+                    </span>
+                  </div>
                 )}
               </div>
-              {!isEditingRate && (
-                <button
-                  onClick={() => {
-                    setRateInput(settings.bcvExchangeRate.toFixed(2));
-                    setIsEditingRate(true);
-                  }}
-                  className="p-1 text-[#8d4b00] hover:bg-[#ffdcc3]/50 rounded-lg transition-colors cursor-pointer"
-                  title="Editar Tasa del Día"
-                  type="button"
-                >
-                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">sync</span>
-                </button>
+
+              {!isEditingRate && (isUserOwner || isUserAdmin) && (
+                <div className="flex items-center gap-1">
+                  {onFetchExchangeRateNow && (
+                    <button
+                      onClick={onFetchExchangeRateNow}
+                      disabled={isFetchingRate}
+                      className={`px-2 py-1 bg-white hover:bg-[#ffdcc3]/50 text-[#8d4b00] border border-[#dbc2b0]/50 rounded-lg text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 cursor-pointer active:scale-95 ${
+                        isFetchingRate ? 'opacity-70 cursor-not-allowed' : ''
+                      }`}
+                      title="🔄 Actualizar Tasa Oficial Ahora (Consulta API BCV)"
+                      type="button"
+                    >
+                      <span className={`material-symbols-outlined text-[15px] ${isFetchingRate ? 'animate-spin' : ''}`}>
+                        sync
+                      </span>
+                      <span className="hidden lg:inline whitespace-nowrap">Actualizar Tasa Ahora</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setRateInput(settings.bcvExchangeRate.toFixed(2));
+                      setIsEditingRate(true);
+                    }}
+                    className="p-1 text-[#554336] hover:text-[#8d4b00] hover:bg-[#ffdcc3]/40 rounded-lg transition-colors cursor-pointer"
+                    title="Editar Tasa Manualmente"
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">edit</span>
+                  </button>
+                </div>
               )}
             </div>
 

@@ -183,6 +183,7 @@ export interface BodegaSettings {
   bodegaName: string;
   cashierName: string;
   lastUpdated: string;
+  lastExchangeRateUpdate?: string;
   pagoMovilPhone: string;
   pagoMovilBank: string;
   pagoMovilCI: string;

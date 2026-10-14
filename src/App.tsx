@@ -70,6 +70,11 @@ import { AuthView } from './components/AuthView';
 import { LandingPage } from './components/LandingPage';
 import { PaywallModal } from './components/PaywallModal';
 import { Toast } from './components/Toast';
+import {
+  initExchangeRateScheduler,
+  fetchOfficialBCVRate,
+  DEFAULT_BCV_RATE
+} from './services/exchangeRateService';
 
 export default function App() {
   // Client-side URL path routing (/register, /login, /)
@@ -90,6 +95,7 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [isFetchingRate, setIsFetchingRate] = useState<boolean>(false);
 
   // Core application data state - Initialized completely in ZERO (Lienzo en Blanco)
   const [products, setProducts] = useState<Product[]>([]);
@@ -215,7 +221,14 @@ export default function App() {
     const unsubCustomers = subscribeToCustomers((custs) => setCustomers(custs), orgId);
     const unsubSales = subscribeToSales((s) => setSales(s), orgId);
     const unsubLedger = subscribeToLedger((l) => setLedgerEntries(l), orgId);
-    const unsubSettings = subscribeToSettings((sett) => setSettings(sett), orgId);
+    const unsubSettings = subscribeToSettings((sett) => {
+      // Normalizar tasa base inicial si la organización tenía la tasa de prueba previa (<= 100)
+      if (!sett.bcvExchangeRate || sett.bcvExchangeRate <= 100) {
+        sett.bcvExchangeRate = DEFAULT_BCV_RATE;
+        updateExchangeRate(DEFAULT_BCV_RATE, orgId, 'Inicial (877.90 Bs/USD)');
+      }
+      setSettings(sett);
+    }, orgId);
     const unsubCollabs = subscribeToCollaborators((collabs) => setCollaborators(collabs), orgId);
 
     return () => {
@@ -227,6 +240,24 @@ export default function App() {
       unsubCollabs();
     };
   }, [currentUser, organization]);
+
+  // Automatic Exchange Rate Scheduler (9:00 AM & 2:00 PM)
+  useEffect(() => {
+    if (!organization) return;
+    const cleanup = initExchangeRateScheduler(async (newRate, timeStr, isAuto) => {
+      await updateExchangeRate(newRate, organization.id, timeStr);
+      if (isAuto) {
+        showToast(
+          `⏰ Tasa cambiaria oficial actualizada automáticamente a ${newRate.toFixed(2)} Bs/USD (${timeStr})`,
+          'currency_exchange'
+        );
+      }
+    });
+
+    return () => {
+      cleanup();
+    };
+  }, [organization?.id]);
 
   // RBAC Enforcement: Strict Redirection based on Role Hierarchy
   useEffect(() => {
@@ -455,10 +486,32 @@ export default function App() {
     showToast(delta > 0 ? 'Stock incrementado +1' : 'Stock descontado -1');
   };
 
-  // Handler: Update Exchange Rate
+  // Handler: Update Exchange Rate Manually
   const handleUpdateExchangeRate = async (rate: number) => {
-    await updateExchangeRate(rate, organization?.id);
-    showToast(`Tasa BCV actualizada a ${rate.toFixed(2)} Bs/$`);
+    const timeStr = new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: true });
+    await updateExchangeRate(rate, organization?.id, `Manual (${timeStr})`);
+    showToast(`Tasa BCV actualizada a ${rate.toFixed(2)} Bs/USD`, 'currency_exchange');
+  };
+
+  // Handler: Manual / On-Demand Sync with Official BCV API
+  const handleFetchRateNow = async () => {
+    setIsFetchingRate(true);
+    try {
+      const res = await fetchOfficialBCVRate();
+      const timeStr = res.lastUpdated;
+      await updateExchangeRate(res.rate, organization?.id, timeStr);
+      showToast(
+        res.success
+          ? `¡Tasa BCV sincronizada a ${res.rate.toFixed(2)} Bs/USD!`
+          : `Tasa establecida en ${res.rate.toFixed(2)} Bs/USD (referencia oficial).`,
+        'currency_exchange'
+      );
+    } catch (e) {
+      console.error(e);
+      showToast('Error al consultar la tasa oficial', 'error');
+    } finally {
+      setIsFetchingRate(false);
+    }
   };
 
   // Handler: Save Customer
@@ -575,6 +628,8 @@ export default function App() {
         setCurrentTab={setCurrentTab}
         settings={settings}
         onUpdateExchangeRate={handleUpdateExchangeRate}
+        onFetchExchangeRateNow={handleFetchRateNow}
+        isFetchingRate={isFetchingRate}
         pendingDebtsCount={pendingDebtsCount}
         totalProductsCount={products.length}
         todaySalesUSD={todaySalesUSD}
@@ -673,6 +728,9 @@ export default function App() {
               userProfile={userProfile}
               collaborators={collaborators}
               onShowToast={showToast}
+              onUpdateExchangeRate={handleUpdateExchangeRate}
+              onFetchExchangeRateNow={handleFetchRateNow}
+              isFetchingRate={isFetchingRate}
               onRefreshOrganization={async () => {
                 if (currentUser) {
                   const snap = await fetchUserProfileAndOrg(currentUser.uid);

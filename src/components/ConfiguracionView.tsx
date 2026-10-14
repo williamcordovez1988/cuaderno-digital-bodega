@@ -14,6 +14,9 @@ interface ConfiguracionViewProps {
   collaborators: UserProfile[];
   onShowToast: (msg: string, icon?: string) => void;
   onRefreshOrganization?: () => void;
+  onUpdateExchangeRate?: (newRate: number) => void;
+  onFetchExchangeRateNow?: () => Promise<void>;
+  isFetchingRate?: boolean;
 }
 
 export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
@@ -22,7 +25,10 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
   userProfile,
   collaborators,
   onShowToast,
-  onRefreshOrganization
+  onRefreshOrganization,
+  onUpdateExchangeRate,
+  onFetchExchangeRateNow,
+  isFetchingRate = false
 }) => {
   // Business Profile Form State
   const [businessName, setBusinessName] = useState(
@@ -34,6 +40,23 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
     settings.logoUrl || organization?.logoUrl || ''
   );
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Exchange rate manual input state
+  const [manualRateInput, setManualRateInput] = useState(settings.bcvExchangeRate.toFixed(2));
+
+  React.useEffect(() => {
+    setManualRateInput(settings.bcvExchangeRate.toFixed(2));
+  }, [settings.bcvExchangeRate]);
+
+  const handleSaveManualRate = () => {
+    const val = parseFloat(manualRateInput);
+    if (!isNaN(val) && val > 0 && onUpdateExchangeRate) {
+      onUpdateExchangeRate(val);
+      onShowToast(`Tasa cambiaria fijada manualmente a ${val.toFixed(2)} Bs / USD`, 'currency_exchange');
+    } else {
+      onShowToast('Por favor ingrese un valor de tasa válido', 'error');
+    }
+  };
 
   // Collaborator Modal & Form State
   const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
@@ -448,6 +471,99 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
                 )}
               </button>
             </form>
+          </div>
+
+          {/* Card: Gestión y Actualización Automática de Tasa Cambiaria Oficial (BCV) */}
+          <div className="bg-white p-6 rounded-2xl border border-[#E8E2D8] shadow-xs space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E8E2D8]">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[22px] text-[#006c4a]">currency_exchange</span>
+                <div>
+                  <h2 className="text-base font-extrabold text-[#111c2d]">
+                    Gestión de Tasa Cambiaria Oficial (BCV)
+                  </h2>
+                  <p className="text-[11px] text-[#554336]">
+                    Moneda y conversión en vivo para ventas, inventario y cuentas por cobrar
+                  </p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-[#82f5c1]/30 text-[#00714e] text-[10px] font-black uppercase">
+                En Vivo
+              </span>
+            </div>
+
+            {/* Display Indicator */}
+            <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#dbc2b0]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#554336] block">
+                  Indicador Vigente en la App:
+                </span>
+                <div className="text-lg sm:text-xl font-black text-[#111c2d] flex items-center gap-1.5 mt-0.5 font-numeric-tally">
+                  <span>💵 Tasa BCV:</span>
+                  <span className="text-[#006c4a]">{settings.bcvExchangeRate.toFixed(2)} Bs/USD</span>
+                </div>
+                <span className="text-[11px] text-[#554336] block mt-0.5">
+                  (Actualizado: <strong>{settings.lastExchangeRateUpdate || settings.lastUpdated || 'Reciente'}</strong>)
+                </span>
+              </div>
+
+              {onFetchExchangeRateNow && (
+                <button
+                  type="button"
+                  onClick={onFetchExchangeRateNow}
+                  disabled={isFetchingRate}
+                  className={`py-2.5 px-4 rounded-xl bg-[#006c4a] hover:bg-[#005137] text-white text-xs font-black shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+                    isFetchingRate ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <span className={`material-symbols-outlined text-[18px] ${isFetchingRate ? 'animate-spin' : ''}`}>
+                    sync
+                  </span>
+                  <span>🔄 Actualizar Tasa Ahora</span>
+                </button>
+              )}
+            </div>
+
+            {/* Programmed Schedule Info */}
+            <div className="p-3.5 rounded-xl bg-[#f0f3ff] border border-[#dbc2b0]/30 text-xs space-y-1.5">
+              <div className="flex items-center gap-2 font-bold text-[#111c2d]">
+                <span className="material-symbols-outlined text-[18px] text-[#8d4b00]">schedule</span>
+                <span>Actualización Automática y Programada (9:00 AM y 2:00 PM)</span>
+              </div>
+              <p className="text-[11px] text-[#554336] leading-relaxed">
+                El sistema consulta automáticamente la API de tasas oficiales del Banco Central de Venezuela en los dos turnos diarios de cotización bancaria (<strong>9:00 AM</strong> y <strong>2:00 PM</strong>) y recalcula instantáneamente los precios, fiados y cierres en toda la aplicación.
+              </p>
+            </div>
+
+            {/* Manual Override Form */}
+            <div>
+              <label className="block text-xs font-bold text-[#111c2d] mb-1.5">
+                Ajuste Manual de Tasa (Opcional):
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#554336] font-bold text-xs">
+                    Bs.
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={manualRateInput}
+                    onChange={(e) => setManualRateInput(e.target.value)}
+                    placeholder="Ej. 877.90"
+                    className="w-full pl-9 pr-3 py-2.5 bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl text-xs font-bold text-[#111c2d] focus:outline-none focus:border-[#8d4b00] focus:bg-white"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveManualRate}
+                  className="py-2.5 px-4 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white text-xs font-black shadow-xs transition-colors cursor-pointer"
+                >
+                  Fijar Tasa Manual
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

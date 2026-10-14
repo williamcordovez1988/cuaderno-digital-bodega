@@ -259,7 +259,8 @@ export const INITIAL_CUSTOMERS: Customer[] = [
 ];
 
 export const INITIAL_SETTINGS: BodegaSettings = {
-  bcvExchangeRate: 64.50,
+  bcvExchangeRate: 877.90,
+  lastExchangeRateUpdate: 'Inicial (877.90 Bs/USD)',
   bodegaName: 'Bodega La Milagrosa',
   cashierName: 'Caja Principal',
   lastUpdated: 'Hoy 9:00 AM',

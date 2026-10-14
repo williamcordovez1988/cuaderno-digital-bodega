@@ -78,12 +78,13 @@ function setLocal<T>(key: string, data: T): void {
   }
 }
 
-// Clean default settings for a newly created organization
+// Clean default settings for a newly created organization (Tasa Base Inicial: 877.90 Bs / USD)
 export const DEFAULT_BLANK_SETTINGS: BodegaSettings = {
-  bcvExchangeRate: 65.0,
+  bcvExchangeRate: 877.90,
   bodegaName: 'Mi Negocio',
   cashierName: 'Caja Principal',
   lastUpdated: 'Reciente',
+  lastExchangeRateUpdate: 'Inicial (877.90 Bs/USD)',
   pagoMovilPhone: '',
   pagoMovilBank: '',
   pagoMovilCI: '',
@@ -595,13 +596,15 @@ export async function adjustProductStock(productId: string, delta: number, orgId
 }
 
 // Update BCV Exchange Rate for tenant
-export async function updateExchangeRate(newRate: number, orgId?: string): Promise<void> {
+export async function updateExchangeRate(newRate: number, orgId?: string, updateTimeStr?: string): Promise<void> {
   const targetOrg = orgId || activeOrganizationId || 'default';
   const keys = getTenantStorageKeys(targetOrg);
   const cached = getLocal<BodegaSettings>(keys.SETTINGS, DEFAULT_BLANK_SETTINGS);
   cached.bcvExchangeRate = newRate;
   cached.organization_id = targetOrg;
-  cached.lastUpdated = new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
+  const timeStr = updateTimeStr || new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: true });
+  cached.lastUpdated = timeStr;
+  cached.lastExchangeRateUpdate = timeStr;
   setLocal(keys.SETTINGS, cached);
   notifySettingsSubscribers(cached, targetOrg);
 
@@ -610,7 +613,8 @@ export async function updateExchangeRate(newRate: number, orgId?: string): Promi
       await setDoc(doc(db, 'settings', targetOrg), {
         ...cached,
         bcvExchangeRate: newRate,
-        lastUpdated: cached.lastUpdated,
+        lastUpdated: timeStr,
+        lastExchangeRateUpdate: timeStr,
         organization_id: targetOrg
       }, { merge: true });
     } catch (error) {
