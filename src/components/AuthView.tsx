@@ -3,8 +3,6 @@ import {
   registerBusiness,
   loginWithEmail,
   loginWithGoogleMultiTenant,
-  getOrCreateWilliamSession,
-  DEFAULT_CREDENTIALS,
   AuthSession
 } from '../firebase/authService';
 
@@ -25,12 +23,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Form Fields - Pre-populated with configured credentials for instant access
-  const [nombreNegocio, setNombreNegocio] = useState('Bodega William');
-  const [nombreUsuario, setNombreUsuario] = useState('William Cordovez');
-  const [email, setEmail] = useState(DEFAULT_CREDENTIALS.email);
-  const [password, setPassword] = useState(DEFAULT_CREDENTIALS.password);
-  const [confirmPassword, setConfirmPassword] = useState(DEFAULT_CREDENTIALS.password);
+  // Form Fields - Initialized completely empty ("") for all users
+  const [nombreNegocio, setNombreNegocio] = useState('');
+  const [nombreUsuario, setNombreUsuario] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [planSuscripcion, setPlanSuscripcion] = useState<'gratuito' | 'emprendedor' | 'pro'>('pro');
 
   const switchMode = (newMode: 'login' | 'register') => {
@@ -134,20 +132,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
       const defaultOrgName = nombreNegocio.trim() ? nombreNegocio.trim() : undefined;
       const session = await loginWithGoogleMultiTenant(defaultOrgName);
       onShowToast(`¡Bienvenido a ${session.organization.nombre_negocio}!`, 'check_circle');
-      onAuthSuccess(session);
-    } catch (err: any) {
-      setErrorMessage(mapAuthError(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleQuickWilliamLogin = async () => {
-    setErrorMessage(null);
-    setLoading(true);
-    try {
-      const session = await getOrCreateWilliamSession();
-      onShowToast(`¡Bienvenido, ${session.profile.nombre}! (${session.organization.nombre_negocio})`, 'storefront');
       onAuthSuccess(session);
     } catch (err: any) {
       setErrorMessage(mapAuthError(err));
@@ -417,92 +401,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
           {/* FORM: LOGIN */}
           {mode === 'login' && (
             <div className="space-y-4">
-              {/* Configured Credentials Quick Access Card */}
-              <div className="p-4 rounded-xl bg-gradient-to-br from-[#ffdcc3]/50 via-white to-[#82f5c1]/20 border-2 border-[#8d4b00]/30 shadow-xs">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[20px] text-[#8d4b00]">badge</span>
-                    <span className="text-xs font-black text-[#111c2d]">Cuenta Principal Configurada</span>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-[#8d4b00] text-white text-[10px] font-extrabold uppercase">
-                    Plan Pro
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-[#554336] mb-2.5">
-                  Credenciales verificadas para acceso directo e inmediato al sistema:
-                </p>
-
-                <div className="space-y-1.5 text-xs mb-3">
-                  <div className="flex items-center justify-between bg-white px-3 py-1.5 rounded-lg border border-[#E8E2D8]">
-                    <span className="text-[11px] font-semibold text-[#8d7c71]">Correo:</span>
-                    <span className="font-mono font-bold text-[#111c2d] text-[11px] select-all">
-                      {DEFAULT_CREDENTIALS.email}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between bg-white px-3 py-1.5 rounded-lg border border-[#E8E2D8]">
-                    <span className="text-[11px] font-semibold text-[#8d7c71]">Contraseña:</span>
-                    <span className="font-mono font-bold text-[#111c2d] text-[11px] select-all">
-                      {DEFAULT_CREDENTIALS.password}
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleQuickWilliamLogin}
-                  disabled={loading}
-                  className="w-full py-2.5 px-3 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined text-[18px]">bolt</span>
-                  ⚡ Ingresar con un Clic ({DEFAULT_CREDENTIALS.userName})
-                </button>
-              </div>
-
-              <div className="relative my-3 text-center">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-[#E8E2D8]" />
-                </div>
-                <span className="relative bg-white px-3 text-[11px] font-semibold text-[#8d7c71]">
-                  o usa el formulario directo (Dueño o Colaborador)
-                </span>
-              </div>
-
-              {/* Quick Collaborator Login Chips if any exist */}
-              {(() => {
-                try {
-                  const raw = localStorage.getItem('bodega_all_collaborators_auth');
-                  if (!raw) return null;
-                  const collabs = JSON.parse(raw);
-                  if (!Array.isArray(collabs) || collabs.length === 0) return null;
-                  return (
-                    <div className="p-2.5 rounded-xl bg-[#f0f3ff] border border-[#dbc2b0]/30 space-y-1.5">
-                      <span className="text-[10px] font-bold text-[#554336] uppercase tracking-wider block">
-                        Colaboradores Registrados (Haz clic para cargar credenciales):
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {collabs.map((c: any) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => {
-                              setEmail(c.email);
-                              setPassword(c.password || '123456');
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-white border border-[#E8E2D8] text-[11px] font-bold text-[#111c2d] hover:border-[#8d4b00] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                          >
-                            <span className="material-symbols-outlined text-[14px] text-[#8d4b00]">badge</span>
-                            <span>{c.nombre} (Empleado)</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                } catch {
-                  return null;
-                }
-              })()}
-
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-[#111c2d] mb-1">
@@ -518,6 +416,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="tucorreo@ejemplo.com"
+                      autoComplete="email"
                       className="w-full pl-9 pr-3 py-2.5 bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl text-xs font-semibold text-[#111c2d] placeholder-[#8d7c71] focus:outline-none focus:border-[#8d4b00] focus:bg-white transition-colors"
                     />
                   </div>
@@ -537,6 +436,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Tu contraseña secreta"
+                      autoComplete="current-password"
                       className="w-full pl-9 pr-3 py-2.5 bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl text-xs font-semibold text-[#111c2d] placeholder-[#8d7c71] focus:outline-none focus:border-[#8d4b00] focus:bg-white transition-colors"
                     />
                   </div>

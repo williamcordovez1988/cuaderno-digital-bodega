@@ -18,18 +18,18 @@ export const NuevoProductoModal: React.FC<NuevoProductoModalProps> = ({
   initialProduct,
   onShowToast
 }) => {
-  const [barcode, setBarcode] = useState('7591031000123');
-  const [name, setName] = useState('Harina PAN Blanca 1kg');
+  const [barcode, setBarcode] = useState('');
+  const [name, setName] = useState('');
   const [category, setCategory] = useState('Víveres Secos');
   const [unit, setUnit] = useState('paq.');
-  const [costUSD, setCostUSD] = useState(0.95);
+  const [costUSD, setCostUSD] = useState(1.00);
   const [marginPercent, setMarginPercent] = useState(30);
   const [roundCents, setRoundCents] = useState(true);
   const [pricingType, setPricingType] = useState<'usd_anchored' | 'fixed_bs'>('usd_anchored');
-  const [fixedPriceBs, setFixedPriceBs] = useState<number>(100);
-  const [currentStock, setCurrentStock] = useState(24);
-  const [minStock, setMinStock] = useState(6);
-  const [supplier, setSupplier] = useState('Dist. Alimentos Mary');
+  const [fixedPriceBs, setFixedPriceBs] = useState<number>(0);
+  const [currentStock, setCurrentStock] = useState(0);
+  const [minStock, setMinStock] = useState(1);
+  const [supplier, setSupplier] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -55,8 +55,8 @@ export const NuevoProductoModal: React.FC<NuevoProductoModalProps> = ({
       setUnit('paq.');
       setCostUSD(1.00);
       setMarginPercent(30);
-      setCurrentStock(12);
-      setMinStock(6);
+      setCurrentStock(0);
+      setMinStock(1);
       setSupplier('');
       setPricingType('usd_anchored');
       setFixedPriceBs(Number((1.30 * exchangeRate).toFixed(2)));
