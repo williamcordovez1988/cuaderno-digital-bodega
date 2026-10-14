@@ -1,0 +1,155 @@
+{
+  "entities": {
+    "Organization": {
+      "title": "Organization",
+      "description": "Registro de negocios/bodegas independientes en arquitectura multi-tenant",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nombre_negocio": { "type": "string" },
+        "plan_suscripcion": { "type": "string" },
+        "fecha_registro": { "type": "string" },
+        "telefono": { "type": "string" },
+        "direccion": { "type": "string" }
+      },
+      "required": ["id", "nombre_negocio", "plan_suscripcion", "fecha_registro"]
+    },
+    "Profile": {
+      "title": "Profile",
+      "description": "Perfil de usuario vinculado a una organización específica con rol definido",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "rol": { "type": "string" },
+        "nombre": { "type": "string" },
+        "email": { "type": "string" },
+        "fecha_creacion": { "type": "string" }
+      },
+      "required": ["id", "user_id", "organization_id", "rol"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Artículos y existencias del inventario de la bodega",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "costUSD": { "type": "number" },
+        "priceUSD": { "type": "number" },
+        "marginPercent": { "type": "number" },
+        "currentStock": { "type": "number" },
+        "minStock": { "type": "number" },
+        "supplier": { "type": "string" },
+        "barcode": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "organization_id", "name", "priceUSD", "currentStock"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Clientes del vecindario con libretas de fiado y cuentas por cobrar",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "creditLimitUSD": { "type": "number" },
+        "currentDebtUSD": { "type": "number" },
+        "lastPurchaseDate": { "type": "string" },
+        "status": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "organization_id", "name", "currentDebtUSD"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "Registro de ventas en mostrador (saldadas o fiadas)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "date": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerId": { "type": "string" },
+        "totalUSD": { "type": "number" },
+        "totalBs": { "type": "number" },
+        "exchangeRate": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "status": { "type": "string" },
+        "cashier": { "type": "string" }
+      },
+      "required": ["id", "organization_id", "date", "totalUSD", "paymentMethod", "status"]
+    },
+    "LedgerEntry": {
+      "title": "LedgerEntry",
+      "description": "Entradas del historial de la libreta de fiados (compras fiadas o abonos)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "type": { "type": "string" },
+        "amountUSD": { "type": "number" },
+        "amountBs": { "type": "number" },
+        "exchangeRate": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "reference": { "type": "string" },
+        "details": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "organization_id", "customerId", "type", "amountUSD", "date"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Configuración global de la bodega y tasa de cambio por negocio",
+      "type": "object",
+      "properties": {
+        "organization_id": { "type": "string" },
+        "bcvExchangeRate": { "type": "number" },
+        "bodegaName": { "type": "string" },
+        "cashierName": { "type": "string" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["bcvExchangeRate"]
+    }
+  },
+  "firestore": {
+    "/organizations/{orgId}": {
+      "schema": "Organization",
+      "description": "Colección de organizaciones / negocios SaaS"
+    },
+    "/profiles/{profileId}": {
+      "schema": "Profile",
+      "description": "Perfiles de usuarios y empleados asociados a una organización"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Colección de productos del inventario aislados por organization_id"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Colección de clientes y libretas aislados por organization_id"
+    },
+    "/sales/{saleId}": {
+      "schema": "Sale",
+      "description": "Colección de ventas del mostrador aisladas por organization_id"
+    },
+    "/ledger_entries/{entryId}": {
+      "schema": "LedgerEntry",
+      "description": "Historial de compras fiadas y abonos de clientes aislados por organization_id"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Ajustes de tasa y bodega por organización"
+    }
+  }
+}

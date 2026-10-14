@@ -1,0 +1,8 @@
+{
+  "name": "Cuaderno Digital",
+  "description": "Punto de venta y libreta contable para bodegas venezolanas con reconocimiento de texto inteligente, conversión bimonetaria USD/Bs a tasa BCV, inventario en tiempo real y cuentas por cobrar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

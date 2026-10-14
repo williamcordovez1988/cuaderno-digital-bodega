@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default catch-all deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Helper to get authenticated user's profile
+    function getProfile() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
+    }
+
+    function isOwnerRole() {
+      return isSignedIn() && (
+        getProfile().rol == 'dueño' || getProfile().rol == 'dueno'
+      );
+    }
+
+    function isValidRole(role) {
+      return role in ['dueño', 'dueno', 'administrador', 'empleado'];
+    }
+
+    function isMemberOf(orgId) {
+      return isSignedIn() && (
+        getProfile().organization_id == orgId
+      );
+    }
+
+    // Organizations
+    match /organizations/{orgId} {
+      // Allow read if user belongs to this org
+      allow read: if isSignedIn() && (
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) &&
+         getProfile().organization_id == orgId)
+      );
+      // Allow create during new business registration
+      allow create: if isSignedIn() && isValidId(orgId);
+      // Allow update if member of org with owner permissions
+      allow update: if isMemberOf(orgId) && isOwnerRole();
+      allow delete: if false;
+    }
+
+    // Profiles - strictly controlled by RBAC
+    match /profiles/{profileId} {
+      // User can read their own profile, or colleagues in the same org
+      allow read: if isSignedIn() && (
+        request.auth.uid == profileId ||
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) &&
+         resource.data.organization_id == getProfile().organization_id)
+      );
+      // Self registration or Owner creating a team member with valid role
+      allow create: if isSignedIn() && (
+        (request.auth.uid == profileId && isValidRole(request.resource.data.rol)) ||
+        (isOwnerRole() && request.resource.data.organization_id == getProfile().organization_id && isValidRole(request.resource.data.rol))
+      );
+      // Self update non-role fields, or Owner updating team member roles/data
+      allow update: if isSignedIn() && (
+        (request.auth.uid == profileId && (request.resource.data.rol == resource.data.rol || isOwnerRole())) ||
+        (isOwnerRole() && resource.data.organization_id == getProfile().organization_id && isValidRole(request.resource.data.rol))
+      );
+      // Only Owner can delete collaborator profiles
+      allow delete: if isOwnerRole() && 
+                    resource.data.organization_id == getProfile().organization_id && 
+                    resource.data.rol != 'dueño' && resource.data.rol != 'dueno';
+    }
+
+    // Products - strictly isolated by organization_id
+    match /products/{productId} {
+      allow read: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+      allow create: if isSignedIn() && (request.resource.data.organization_id == getProfile().organization_id) && isValidId(productId);
+      allow update: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+      allow delete: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+    }
+
+    // Customers - strictly isolated by organization_id
+    match /customers/{customerId} {
+      allow read: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+      allow create: if isSignedIn() && (request.resource.data.organization_id == getProfile().organization_id) && isValidId(customerId);
+      allow update: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+      allow delete: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+    }
+
+    // Sales - strictly isolated by organization_id
+    match /sales/{saleId} {
+      allow read: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+      allow create: if isSignedIn() && (request.resource.data.organization_id == getProfile().organization_id) && isValidId(saleId);
+      allow update: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+      allow delete: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+    }
+
+    // Ledger Entries (Fiados / Abonos) - strictly isolated by organization_id
+    match /ledger_entries/{entryId} {
+      allow read: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+      allow create: if isSignedIn() && (request.resource.data.organization_id == getProfile().organization_id) && isValidId(entryId);
+      allow update: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+      allow delete: if isSignedIn() && (resource.data.organization_id == getProfile().organization_id);
+    }
+
+    // Settings - isolated per organization
+    match /settings/{settingId} {
+      allow read: if isSignedIn() && (
+        settingId == getProfile().organization_id ||
+        resource.data.organization_id == getProfile().organization_id
+      );
+      allow create, update: if isSignedIn() && (
+        settingId == getProfile().organization_id ||
+        request.resource.data.organization_id == getProfile().organization_id
+      );
+      allow delete: if false;
+    }
+  }
+}
