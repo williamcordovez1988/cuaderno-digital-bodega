@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import { OrganizationAdminRecord, PLAN_PRICING } from '../firebase/types';
 import {
   getAllOrganizationsForAdmin,
@@ -22,14 +24,14 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [planFilter, setPlanFilter] = useState<'all' | 'gratuito' | 'pro' | 'premium'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'expired'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pendiente_pago' | 'paused' | 'expired'>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'products' | 'plan'>('recent');
 
   // Modals state
   const [editingOrg, setEditingOrg] = useState<OrganizationAdminRecord | null>(null);
   const [isExpiryModalOpen, setIsExpiryModalOpen] = useState<boolean>(false);
   const [modalExpiryDate, setModalExpiryDate] = useState<string>('');
-  const [modalStatus, setModalStatus] = useState<'active' | 'paused' | 'expired'>('active');
+  const [modalStatus, setModalStatus] = useState<'active' | 'paused' | 'expired' | 'pendiente_pago'>('active');
   const [modalNotes, setModalNotes] = useState<string>('');
 
   const [deletingOrg, setDeletingOrg] = useState<OrganizationAdminRecord | null>(null);
@@ -44,7 +46,7 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
   const [newNotes, setNewNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Load organizations on mount
+  // Load organizations on mount and listen to Firestore updates
   const loadOrgs = async () => {
     setIsLoading(true);
     try {
@@ -60,6 +62,20 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
 
   useEffect(() => {
     loadOrgs();
+
+    try {
+      const unsub = onSnapshot(collection(db, 'organizations'), () => {
+        // Silently reload organizations when changes happen
+        getAllOrganizationsForAdmin().then((records) => {
+          setOrganizations(records);
+        }).catch((err) => {
+          console.warn('Realtime sync reload error:', err);
+        });
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn('Could not establish organizations realtime listener:', e);
+    }
   }, []);
 
   // Quick Plan Activation (1-Click) with Mensual (+30d) or Anual (+365d)
@@ -498,19 +514,39 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
             {/* Filters by Status */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
               <span className="text-xs font-bold text-[#554336] mr-1 hidden sm:inline">Estado:</span>
-              {(['all', 'active', 'paused', 'expired'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                    statusFilter === s
-                      ? 'bg-[#006c4a] text-white shadow-xs'
-                      : 'bg-[#f0f3ff] text-[#554336] hover:bg-[#e7eeff]'
-                  }`}
-                >
-                  {s === 'all' ? 'Todos' : s === 'active' ? 'Activos' : s === 'paused' ? 'Pausados' : 'Vencidos'}
-                </button>
-              ))}
+              {(['all', 'active', 'pendiente_pago', 'paused', 'expired'] as const).map((s) => {
+                const pendingCount = organizations.filter(o => o.subscriptionStatus === 'pendiente_pago').length;
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setStatusFilter(s)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1 ${
+                      statusFilter === s
+                        ? s === 'pendiente_pago'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-[#006c4a] text-white shadow-xs'
+                        : 'bg-[#f0f3ff] text-[#554336] hover:bg-[#e7eeff]'
+                    }`}
+                  >
+                    <span>
+                      {s === 'all'
+                        ? 'Todos'
+                        : s === 'active'
+                        ? 'Activos'
+                        : s === 'pendiente_pago'
+                        ? '⏳ Pendientes de Pago'
+                        : s === 'paused'
+                        ? 'Pausados'
+                        : 'Vencidos'}
+                    </span>
+                    {s === 'pendiente_pago' && pendingCount > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-white text-amber-700 text-[10px] font-black">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Sort Dropdown */}
@@ -594,6 +630,7 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
                     const isActive = org.subscriptionStatus === 'active';
                     const isPaused = org.subscriptionStatus === 'paused';
                     const isExpired = org.subscriptionStatus === 'expired';
+                    const isPendiente = org.subscriptionStatus === 'pendiente_pago';
 
                     // Clean phone for WhatsApp link
                     const cleanPhone = (org.ownerPhone || org.telefono || '').replace(/[^0-9]/g, '');
@@ -676,20 +713,27 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
 
                         {/* Estado de Suscripción */}
                         <td className="py-3.5 px-4 text-center">
-                          <button
-                            onClick={() => handleToggleStatus(org)}
-                            title="Haz clic para alternar entre Activo y Pausado"
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all active:scale-95 ${
-                              isActive
-                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                : isPaused
-                                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                                : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
-                            }`}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                            {isActive ? 'Activo' : isPaused ? 'Pausado' : 'Vencido'}
-                          </button>
+                          {isPendiente ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-2xs animate-pulse">
+                              <span className="material-symbols-outlined text-[12px]">schedule</span>
+                              Pendiente Pago
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleToggleStatus(org)}
+                              title="Haz clic para alternar entre Activo y Pausado"
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all active:scale-95 ${
+                                isActive
+                                  ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                  : isPaused
+                                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                  : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+                              }`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                              {isActive ? 'Activo' : isPaused ? 'Pausado' : 'Vencido'}
+                            </button>
+                          )}
                         </td>
 
                         {/* Productos */}
@@ -738,8 +782,21 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
 
                         {/* Acciones Rápidas (1 Clic) */}
                         <td className="py-3.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1 flex-wrap max-w-[210px] mx-auto">
+                          <div className="flex flex-col items-center justify-center max-w-[210px] mx-auto">
                             
+                            {/* 1-Click activation for pending payments */}
+                            {isPendiente && (
+                              <button
+                                onClick={() => handleQuickChangePlan(org, isPremium ? 'premium' : 'pro', 30)}
+                                title="Confirmar Pago y Activar Suscripción por 30 días"
+                                className="w-full mb-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] shadow-xs flex items-center justify-center gap-1 transition-all cursor-pointer animate-pulse"
+                              >
+                                <span className="material-symbols-outlined text-[13px]">verified</span>
+                                ✅ Activar {isPremium ? 'Premium (30d)' : 'Pro (30d)'}
+                              </button>
+                            )}
+
+                            <div className="flex items-center justify-center gap-1 flex-wrap">
                             {/* Cambiar a Pro (Mensual / Anual) */}
                             {!isPro && (
                               <div className="inline-flex rounded-lg shadow-2xs">
@@ -814,9 +871,9 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
                             >
                               <span className="material-symbols-outlined text-[15px]">delete_forever</span>
                             </button>
-
                           </div>
-                        </td>
+                        </div>
+                      </td>
 
                       </tr>
                     );
@@ -861,23 +918,31 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
               {/* Status Selector */}
               <div>
                 <label className="block font-bold text-[#111c2d] mb-1">Estado de la Suscripción:</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['active', 'paused', 'expired'] as const).map((st) => (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {(['active', 'pendiente_pago', 'paused', 'expired'] as const).map((st) => (
                     <button
                       key={st}
                       type="button"
                       onClick={() => setModalStatus(st)}
-                      className={`py-2 rounded-xl font-bold capitalize transition-all cursor-pointer border ${
+                      className={`py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                         modalStatus === st
                           ? st === 'active'
                             ? 'bg-emerald-600 text-white border-emerald-600'
-                            : st === 'paused'
+                            : st === 'pendiente_pago'
                             ? 'bg-amber-600 text-white border-amber-600'
+                            : st === 'paused'
+                            ? 'bg-yellow-600 text-white border-yellow-600'
                             : 'bg-rose-600 text-white border-rose-600'
                           : 'bg-[#FAF8F5] text-[#554336] border-[#dbc2b0]/50'
                       }`}
                     >
-                      {st === 'active' ? 'Activo' : st === 'paused' ? 'Pausado' : 'Vencido'}
+                      {st === 'active'
+                        ? 'Activo'
+                        : st === 'pendiente_pago'
+                        ? 'Pendiente'
+                        : st === 'paused'
+                        ? 'Pausado'
+                        : 'Vencido'}
                     </button>
                   ))}
                 </div>

@@ -9,7 +9,7 @@ export interface Organization {
   ai_scans_used?: number;
   ownerEmail?: string;
   ownerName?: string;
-  subscriptionStatus?: 'active' | 'paused' | 'expired';
+  subscriptionStatus?: 'active' | 'paused' | 'expired' | 'pendiente_pago';
   subscriptionExpiryDate?: string;
   productsCount?: number;
   paymentNotes?: string;
@@ -40,12 +40,13 @@ export interface OrganizationAdminRecord extends Organization {
   productsCount: number;
   customersCount?: number;
   totalSalesUSD?: number;
-  subscriptionStatus: 'active' | 'paused' | 'expired';
+  subscriptionStatus: 'active' | 'paused' | 'expired' | 'pendiente_pago';
   subscriptionExpiryDate: string;
   paymentNotes?: string;
 }
 
-export function isTrialPlan(plan?: string | null): boolean {
+export function isTrialPlan(plan?: string | null, status?: string | null): boolean {
+  if (status === 'pendiente_pago' || status === 'paused' || status === 'expired') return true;
   if (!plan) return true;
   const p = plan.toLowerCase().trim();
   return p === 'trial' || p === 'prueba' || p === 'gratuito' || p === 'basico';

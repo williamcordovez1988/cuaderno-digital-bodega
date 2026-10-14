@@ -1328,6 +1328,13 @@ export function syncOrganizationToMasterRegistry(org: Partial<OrganizationAdminR
       });
     }
     localStorage.setItem(SAAS_ORGANIZATIONS_REGISTRY_KEY, JSON.stringify(list));
+
+    // Persist directly to Firestore organizations collection
+    try {
+      setDoc(doc(db, ORGANIZATIONS_COLLECTION, org.id), org, { merge: true });
+    } catch (fsErr) {
+      console.warn('Could not sync org directly to Firestore:', fsErr);
+    }
   } catch (e) {
     console.warn('Failed to sync organization to master registry:', e);
   }
@@ -1488,13 +1495,11 @@ export async function updateOrganizationPlanAndStatus(
     console.warn('Failed to update active session:', e);
   }
 
-  // Persist to Firestore
-  if (auth.currentUser) {
-    try {
-      await setDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), updates, { merge: true });
-    } catch (e) {
-      console.warn('Failed to persist organization update to Firestore:', e);
-    }
+  // Persist directly to Firestore
+  try {
+    await setDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), updates, { merge: true });
+  } catch (e) {
+    console.warn('Failed to persist organization update to Firestore:', e);
   }
 }
 

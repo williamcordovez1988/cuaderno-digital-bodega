@@ -71,6 +71,7 @@ import { AuthView } from './components/AuthView';
 import { LandingPage } from './components/LandingPage';
 import { MasterAdminView } from './components/MasterAdminView';
 import { PaywallModal } from './components/PaywallModal';
+import { DirectPaymentModal } from './components/DirectPaymentModal';
 import { Toast } from './components/Toast';
 import {
   initExchangeRateScheduler,
@@ -117,6 +118,8 @@ export default function App() {
   const [cashChangeData, setCashChangeData] = useState<{ totalUSD: number; totalBs: number } | null>(null);
   const [isCargarFacturaOpen, setIsCargarFacturaOpen] = useState(false);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+  const [isDirectPaymentOpen, setIsDirectPaymentOpen] = useState(false);
+  const [directPaymentPlan, setDirectPaymentPlan] = useState<'pro' | 'premium'>('pro');
   const [paywallOptions, setPaywallOptions] = useState<{
     reason?: 'products_limit' | 'invoice_ai_limit';
     title?: string;
@@ -331,6 +334,13 @@ export default function App() {
     setOrganization(session.organization);
     setActiveOrganizationId(session.organization.id);
     navigate('/');
+
+    if (session.organization?.subscriptionStatus === 'pendiente_pago') {
+      const plan = (session.organization.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro';
+      setDirectPaymentPlan(plan);
+      setIsDirectPaymentOpen(true);
+      showToast('Por favor completa y reporta tu pago para activar tu suscripción', 'payments');
+    }
   };
 
   // Handler: Logout
@@ -427,20 +437,11 @@ export default function App() {
     }
   };
 
-  // Handler: Upgrade to Plan Pro (Freemium Paywall Action)
-  const handleUpgradeToPro = async () => {
-    if (!organization) return;
-    try {
-      await updateDoc(doc(db, 'organizations', organization.id), {
-        plan_suscripcion: 'pro'
-      });
-      setOrganization((prev) => (prev ? { ...prev, plan_suscripcion: 'pro' } : null));
-      setIsPaywallOpen(false);
-      showToast('¡Felicidades! Has actualizado al Plan Pro. Tu inventario y escaneos con IA ahora son ilimitados.', 'workspace_premium');
-    } catch (e) {
-      console.error('Error upgrading plan:', e);
-      showToast('Error al actualizar al Plan Pro', 'error');
-    }
+  // Handler: Upgrade to Plan Pro (Freemium Paywall Action) - Opens direct payment modal
+  const handleUpgradeToPro = () => {
+    setIsPaywallOpen(false);
+    setDirectPaymentPlan('pro');
+    setIsDirectPaymentOpen(true);
   };
 
   // Handler: Save Product (New or Edit) - Enforces 5 product limit on Trial
@@ -718,6 +719,29 @@ export default function App() {
         onShowToast={showToast}
       />
 
+      {/* Top Banner for Pending Payment */}
+      {organization?.subscriptionStatus === 'pendiente_pago' && (
+        <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-white px-4 py-3 text-xs font-bold flex flex-wrap items-center justify-between gap-3 shadow-md sticky top-16 z-20">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[20px] animate-pulse">schedule</span>
+            <span>
+              <strong>Plan {(organization.plan_suscripcion || 'Pro').toUpperCase()} (Pendiente de Pago):</strong> Tu bodega opera con límites de prueba hasta que el Creador verifique tu comprobante.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setDirectPaymentPlan((organization.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro');
+              setIsDirectPaymentOpen(true);
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-white text-amber-900 hover:bg-amber-50 font-extrabold text-xs shadow-sm cursor-pointer flex items-center gap-1.5 transition-all active:scale-95"
+          >
+            <span>📲 Reportar Pago por WhatsApp (+584241289468)</span>
+            <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+          </button>
+        </div>
+      )}
+
       {/* Main Content View Container */}
       <main className="w-full pt-28 sm:pt-32 pb-28 sm:pb-20 flex-1">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -894,6 +918,20 @@ export default function App() {
         customTitle={paywallOptions.title}
         customSubtitle={paywallOptions.subtitle}
         customBadge={paywallOptions.badge}
+      />
+
+      {/* Direct Payment Modal with Real Banking Details */}
+      <DirectPaymentModal
+        isOpen={isDirectPaymentOpen}
+        onClose={() => setIsDirectPaymentOpen(false)}
+        bcvRate={settings.bcvExchangeRate}
+        initialPlan={directPaymentPlan}
+        defaultStoreName={organization?.nombre_negocio || ''}
+        defaultEmail={organization?.ownerEmail || currentUser?.email || ''}
+        onPaymentReported={() => {
+          setIsDirectPaymentOpen(false);
+          showToast('¡Reporte enviado por WhatsApp! El Creador verificará y activará tu cuenta.', 'chat');
+        }}
       />
 
       {/* Toast Notification */}

@@ -29,7 +29,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [planSuscripcion, setPlanSuscripcion] = useState<'gratuito' | 'emprendedor' | 'pro'>('pro');
+  const [planSuscripcion, setPlanSuscripcion] = useState<'gratuito' | 'pro' | 'premium'>('pro');
 
   const switchMode = (newMode: 'login' | 'register') => {
     setErrorMessage(null);
@@ -167,13 +167,13 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <h2 className="text-2xl sm:text-3xl font-extrabold text-[#111c2d] tracking-tight">
             Cuaderno Digital
           </h2>
-          <span className="px-2.5 py-0.5 rounded-full bg-[#82f5c1] text-[#00714e] text-xs font-black tracking-wide">
-            SaaS B2B
+          <span className="px-2.5 py-0.5 rounded-full bg-[#ffdcc3] text-[#8d4b00] text-xs font-black tracking-wide">
+            Bodega Digital
           </span>
         </div>
         <p className="mt-1 text-xs sm:text-sm text-[#554336]">
           {mode === 'register'
-            ? 'Crea tu cuenta de negocio con arquitectura multi-tenant aislada'
+            ? 'Crea la cuenta de tu bodega o negocio y comienza al instante'
             : 'Accede al panel contable y mostrador de tu bodega'}
         </p>
       </div>
@@ -194,7 +194,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               }`}
             >
               <span className="material-symbols-outlined text-[18px]">login</span>
-              Iniciar Sesión (/login)
+              Iniciar Sesión
             </button>
             <button
               type="button"
@@ -206,7 +206,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               }`}
             >
               <span className="material-symbols-outlined text-[18px]">storefront</span>
-              Registrar Negocio (/register)
+              Registrar Negocio
             </button>
           </div>
 
@@ -239,7 +239,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   />
                 </div>
                 <p className="text-[10px] text-[#554336] mt-0.5">
-                  Se creará un espacio multi-tenant aislado (organizations) para este comercio.
+                  Configuración rápida y privada para tu comercio.
                 </p>
               </div>
 
@@ -336,21 +336,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
                         : 'border-[#E8E2D8] bg-[#FAF8F5] text-[#554336] hover:bg-white'
                     }`}
                   >
-                    <div className="font-extrabold text-[11px] leading-tight">Gratuito</div>
-                    <div className="text-[10px] text-[#006c4a] font-bold">0 Bs / mes</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPlanSuscripcion('emprendedor')}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      planSuscripcion === 'emprendedor'
-                        ? 'border-[#8d4b00] bg-[#ffdcc3]/30 text-[#8d4b00]'
-                        : 'border-[#E8E2D8] bg-[#FAF8F5] text-[#554336] hover:bg-white'
-                    }`}
-                  >
-                    <div className="font-extrabold text-[11px] leading-tight">Emprendedor</div>
-                    <div className="text-[10px] text-[#8d4b00] font-bold">$9 USD / mes</div>
+                    <div className="font-extrabold text-[11px] leading-tight">Plan Gratuito</div>
+                    <div className="text-[10px] text-[#006c4a] font-bold">$0 / mes</div>
                   </button>
 
                   <button
@@ -362,20 +349,23 @@ export const AuthView: React.FC<AuthViewProps> = ({
                         : 'border-[#E8E2D8] bg-[#FAF8F5] text-[#554336] hover:bg-white'
                     }`}
                   >
-                    <div className="font-extrabold text-[11px] leading-tight">Pro Multi-Caja</div>
-                    <div className="text-[10px] text-[#8d4b00] font-bold">$19 USD / mes</div>
+                    <div className="font-extrabold text-[11px] leading-tight">Plan Pro</div>
+                    <div className="text-[10px] text-[#8d4b00] font-bold">$9.99 / mes</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPlanSuscripcion('premium')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      planSuscripcion === 'premium'
+                        ? 'border-[#8d4b00] bg-[#ffdcc3]/30 text-[#8d4b00]'
+                        : 'border-[#E8E2D8] bg-[#FAF8F5] text-[#554336] hover:bg-white'
+                    }`}
+                  >
+                    <div className="font-extrabold text-[11px] leading-tight">Plan Premium</div>
+                    <div className="text-[10px] text-[#8d4b00] font-bold">$19.99 / mes</div>
                   </button>
                 </div>
-              </div>
-
-              {/* Blank Canvas Assurance Banner */}
-              <div className="p-3 bg-[#85f8c4]/20 border border-[#82f5c1]/60 rounded-xl flex items-center gap-2 text-[11px] text-[#006c4a]">
-                <span className="material-symbols-outlined text-[18px] shrink-0 text-[#006c4a]">
-                  inventory
-                </span>
-                <span>
-                  <strong>Lienzo en Blanco Garantizado:</strong> Tu cuenta iniciará totalmente en cero: 0 productos, 0 clientes y $0.00 en ventas.
-                </span>
               </div>
 
               <button
@@ -386,7 +376,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 {loading ? (
                   <>
                     <span className="material-symbols-outlined text-[18px] animate-spin">refresh</span>
-                    Registrando negocio en Firebase...
+                    Registrando negocio...
                   </>
                 ) : (
                   <>
@@ -537,15 +527,15 @@ export const AuthView: React.FC<AuthViewProps> = ({
             <span className="material-symbols-outlined text-[16px] text-[#006c4a] block mb-0.5">
               shield
             </span>
-            <span className="font-bold">Seguridad RLS</span>
-            <div className="text-[9px] opacity-75">Datos aislados</div>
+            <span className="font-bold">Máxima Seguridad</span>
+            <div className="text-[9px] opacity-75">Tus datos protegidos</div>
           </div>
           <div className="p-2 rounded-xl bg-white border border-[#E8E2D8]">
             <span className="material-symbols-outlined text-[16px] text-[#8d4b00] block mb-0.5">
-              auto_awesome
+              storefront
             </span>
-            <span className="font-bold">Lienzo en Blanco</span>
-            <div className="text-[9px] opacity-75">Sin datos demo</div>
+            <span className="font-bold">Tu Inventario</span>
+            <div className="text-[9px] opacity-75">Listo para comenzar</div>
           </div>
           <div className="p-2 rounded-xl bg-white border border-[#E8E2D8]">
             <span className="material-symbols-outlined text-[16px] text-[#006c4a] block mb-0.5">

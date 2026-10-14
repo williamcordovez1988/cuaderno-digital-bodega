@@ -162,6 +162,12 @@ export async function registerBusiness({
     // 2. Generate unique organization ID
     const orgId = `org-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    const isPaidPlan = planSuscripcion === 'pro' || planSuscripcion === 'premium';
+    const subStatus: 'active' | 'pendiente_pago' = isPaidPlan ? 'pendiente_pago' : 'active';
+    const paymentNotes = isPaidPlan
+      ? `Pendiente de Pago (${planSuscripcion.toUpperCase()}) por confirmar recepción vía Pago Móvil / Binance / Zinli`
+      : 'Plan Gratuito Permanente';
+
     const organization: Organization = {
       id: orgId,
       nombre_negocio: nombreNegocio.trim(),
@@ -169,8 +175,12 @@ export async function registerBusiness({
       fecha_registro: new Date().toISOString(),
       ownerEmail: user.email || email.trim(),
       ownerName: nombreUsuario.trim(),
-      subscriptionStatus: 'active',
-      subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+      telefono: '',
+      subscriptionStatus: subStatus,
+      subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      paymentNotes,
+      ai_scans_used: 0,
+      productsCount: 0
     };
 
     syncOrganizationToMasterRegistry(organization);
@@ -199,10 +209,14 @@ export async function registerBusiness({
       pagoMovilCI: ''
     };
 
-    // 5. Persist to Firestore
-    await setDoc(doc(db, 'organizations', orgId), organization);
-    await setDoc(doc(db, 'profiles', user.uid), profile);
-    await setDoc(doc(db, 'settings', orgId), initialSettings);
+    // 5. Persist directly to Firestore
+    try {
+      await setDoc(doc(db, 'organizations', orgId), organization, { merge: true });
+      await setDoc(doc(db, 'profiles', user.uid), profile, { merge: true });
+      await setDoc(doc(db, 'settings', orgId), initialSettings, { merge: true });
+    } catch (fsErr) {
+      console.warn('Direct Firestore write error during registration:', fsErr);
+    }
 
     const session: AuthSession = { user, profile, organization };
     saveActiveStoredSession(session);
@@ -212,6 +226,12 @@ export async function registerBusiness({
     if (err?.code === 'auth/operation-not-allowed') {
       const orgId = `org-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const userId = `user-${Date.now()}`;
+      const isPaidPlan = planSuscripcion === 'pro' || planSuscripcion === 'premium';
+      const subStatus: 'active' | 'pendiente_pago' = isPaidPlan ? 'pendiente_pago' : 'active';
+      const paymentNotes = isPaidPlan
+        ? `Pendiente de Pago (${planSuscripcion.toUpperCase()}) por confirmar recepción vía Pago Móvil / Binance / Zinli`
+        : 'Plan Gratuito Permanente';
+
       const organization: Organization = {
         id: orgId,
         nombre_negocio: nombreNegocio.trim(),
@@ -219,10 +239,15 @@ export async function registerBusiness({
         fecha_registro: new Date().toISOString(),
         ownerEmail: email.trim(),
         ownerName: nombreUsuario.trim(),
-        subscriptionStatus: 'active',
-        subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+        telefono: '',
+        subscriptionStatus: subStatus,
+        subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        paymentNotes,
+        ai_scans_used: 0,
+        productsCount: 0
       };
       syncOrganizationToMasterRegistry(organization);
+
       const profile: UserProfile = {
         id: userId,
         user_id: userId,
@@ -232,6 +257,27 @@ export async function registerBusiness({
         email: email.trim(),
         fecha_creacion: new Date().toISOString()
       };
+
+      const initialSettings: BodegaSettings = {
+        organization_id: orgId,
+        bcvExchangeRate: 877.90,
+        bodegaName: nombreNegocio.trim(),
+        cashierName: nombreUsuario.trim() || 'Caja Principal',
+        lastUpdated: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        lastExchangeRateUpdate: 'Inicial (877.90 Bs/USD)',
+        pagoMovilPhone: '',
+        pagoMovilBank: '',
+        pagoMovilCI: ''
+      };
+
+      try {
+        await setDoc(doc(db, 'organizations', orgId), organization, { merge: true });
+        await setDoc(doc(db, 'profiles', userId), profile, { merge: true });
+        await setDoc(doc(db, 'settings', orgId), initialSettings, { merge: true });
+      } catch (fsErr) {
+        console.warn('Fallback Firestore write error:', fsErr);
+      }
+
       const user = {
         uid: userId,
         email: email.trim(),

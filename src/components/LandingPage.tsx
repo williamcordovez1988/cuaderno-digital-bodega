@@ -122,8 +122,8 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                 <span className="font-heading font-black text-lg sm:text-xl text-[#111c2d] tracking-tight">
                   Cuaderno Digital
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#82f5c1] text-[#00714e] text-[10px] font-black uppercase tracking-wider">
-                  Bodega SaaS
+                <span className="px-2 py-0.5 rounded-full bg-[#ffdcc3] text-[#8d4b00] text-[10px] font-black uppercase tracking-wider">
+                  Bodega Inteligente
                 </span>
               </div>
               <p className="text-[11px] text-[#554336] hidden sm:block">
@@ -285,7 +285,7 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
             {/* Pill Eyebrow */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#f0f3ff] border border-[#dbc2b0]/50 text-xs font-bold text-[#8d4b00] shadow-2xs animate-in fade-in duration-300">
               <span className="w-2 h-2 rounded-full bg-[#006c4a] animate-pulse" />
-              <span>SaaS Especializado para el Comercio Minorista y Bodegas</span>
+              <span>Sistema Especializado para el Comercio Minorista y Bodegas</span>
               <span className="px-1.5 py-0.2 rounded-md bg-[#82f5c1] text-[#00714e] text-[9px] font-black uppercase">
                 Tasa BCV En Vivo
               </span>
@@ -337,7 +337,7 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[18px] text-[#006c4a]">check_circle</span>
-                Multi-Tenant: tus datos 100% aislados
+                Seguridad Total: tus datos 100% privados
               </span>
             </div>
 
