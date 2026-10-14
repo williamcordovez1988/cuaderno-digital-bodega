@@ -67,7 +67,7 @@ Reglas estrictas de extracción:
   const userContent: any[] = [
     {
       type: 'text',
-      text: 'Analiza detalladamente esta factura con visión artificial y extrae la lista de productos (nombre, cantidad y costo unitario), el proveedor, número y fecha en formato JSON.'
+      text: 'Analiza esta factura o lista de compras. Devuelve ÚNICAMENTE un objeto JSON con esta estructura exacta: { "productos": [ { "nombre": "string", "cantidad": number, "costo_unitario": number } ] }'
     }
   ];
 
@@ -75,8 +75,7 @@ Reglas estrictas de extracción:
     userContent.push({
       type: 'image_url',
       image_url: {
-        url: imageUrl,
-        detail: 'high'
+        url: imageUrl
       }
     });
   }
@@ -97,18 +96,13 @@ Reglas estrictas de extracción:
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        response_format: { type: 'json_object' },
         messages: [
-          {
-            role: 'system',
-            content: systemInstructions
-          },
           {
             role: 'user',
             content: userContent
           }
         ],
-        temperature: 0.2
+        response_format: { type: 'json_object' }
       })
     });
 
@@ -126,11 +120,19 @@ Reglas estrictas de extracción:
     const parsed = JSON.parse(content.trim());
     const catalog = Array.isArray(payload.catalog) ? payload.catalog : [];
 
-    const rawItems: any[] = Array.isArray(parsed.items) ? parsed.items : [];
-    const items = rawItems.map((raw: any) => {
-      const productName = String(raw.productName || 'Producto detectado').trim();
-      const quantity = Math.max(1, Number(raw.quantity) || 1);
-      const costUSD = Math.max(0.01, Number(raw.costUSD) || 1.0);
+    const rawList: any[] = Array.isArray(parsed.productos)
+      ? parsed.productos
+      : Array.isArray(parsed.items)
+      ? parsed.items
+      : Array.isArray(parsed.products)
+      ? parsed.products
+      : [];
+
+    const items = rawList.map((raw: any) => {
+      const productName = String(raw.nombre || raw.productName || raw.name || 'Producto detectado').trim();
+      const quantity = Math.max(1, Number(raw.cantidad || raw.quantity) || 1);
+      const rawCost = Number(raw.costo_unitario ?? raw.costUSD ?? raw.costo ?? 1.0);
+      const costUSD = Math.max(0.01, Number(rawCost.toFixed(2)) || 1.0);
       const costBs = Number((costUSD * rate).toFixed(2));
       const margin = 30;
       const suggestedUSD = Number((costUSD * 1.3).toFixed(2));
@@ -144,16 +146,16 @@ Reglas estrictas de extracción:
 
       return {
         productId: matched?.id,
-        productName,
+        productName: matched ? matched.name : productName,
         productCode: matched?.code || raw.productCode,
         quantity,
-        unit: raw.unit || matched?.unit || 'und.',
+        unit: raw.unidad || raw.unit || matched?.unit || 'und.',
         costUSD,
         costBs,
         suggestedPriceUSD: suggestedUSD,
         suggestedPriceBs: suggestedBs,
         marginPercent: margin,
-        category: matched?.category || raw.category || 'Víveres Secos',
+        category: matched?.category || raw.categoria || raw.category || 'Víveres Secos',
         isNewProduct: !matched
       };
     });

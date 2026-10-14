@@ -43,7 +43,7 @@ export const CargarFacturaModal: React.FC<CargarFacturaModalProps> = ({
   organizationId,
   onOpenPaywallModal
 }) => {
-  const [activeTab, setActiveTab] = useState<'camera_file' | 'templates' | 'text'>('camera_file');
+  const [activeTab, setActiveTab] = useState<'camera_file' | 'text'>('camera_file');
   const [invoiceText, setInvoiceText] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -91,11 +91,26 @@ export const CargarFacturaModal: React.FC<CargarFacturaModalProps> = ({
     setSelectedFile(file);
     const isFilePdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     setIsPdf(isFilePdf);
-    setFileMimeType(isFilePdf ? 'application/pdf' : file.type || 'image/jpeg');
+    
+    // Normalizar MIME type para .jfif y formatos no estándar a image/jpeg
+    let detectedMime = isFilePdf ? 'application/pdf' : file.type || 'image/jpeg';
+    if (file.name.toLowerCase().endsWith('.jfif')) {
+      detectedMime = 'image/jpeg';
+    }
+    setFileMimeType(detectedMime);
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      setFilePreview(event.target?.result as string);
+      let result = event.target?.result as string;
+      if (
+        result &&
+        (result.startsWith('data:image/jfif') ||
+          result.startsWith('data:;base64,') ||
+          result.startsWith('data:application/octet-stream'))
+      ) {
+        result = result.replace(/^data:[^;]+;base64,/, 'data:image/jpeg;base64,');
+      }
+      setFilePreview(result);
     };
     reader.readAsDataURL(file);
   };
@@ -116,65 +131,6 @@ export const CargarFacturaModal: React.FC<CargarFacturaModalProps> = ({
     }
   };
 
-  // Distributor Templates for 1-Click Testing
-  const handleLoadTemplate = (type: 'polar' | 'pepsi' | 'local') => {
-    setSelectedFile(null);
-    setFilePreview(null);
-    setIsPdf(false);
-
-    if (type === 'polar') {
-      setSupplierName('Empresas Polar C.A.');
-      setInvoiceText(`EMPRESAS POLAR C.A. - DISTRIBUIDORA OCCIDENTE
-FACTURA LEGAL / NOTA DE ENTREGA: #POL-99412
-FECHA: ${new Date().toLocaleDateString('es-VE')}
-CLIENTE: BODEGA LA MILAGROSA
-
-DETALLE DE PRODUCTOS RECIBIDOS:
-1. HARINA PAN BLANCA 1KG | CANTIDAD: 40 PAQUETES | COSTO UNITARIO: $0.98 USD
-2. ARROZ MARY TRADICIONAL 1KG | CANTIDAD: 24 PAQUETES | COSTO UNITARIO: $1.12 USD
-3. MARGARINA MAVESA 500G | CANTIDAD: 20 TARRINAS | COSTO UNITARIO: $1.75 USD
-4. MALTIN POLAR BOTELLA 250ML | CANTIDAD: 48 BOTELLAS | COSTO UNITARIO: $0.62 USD
-5. ACEITE VEGETAL VATEL 1L | CANTIDAD: 15 BOTELLAS | COSTO UNITARIO: $2.45 USD
-
-TOTAL DESPACHO: $186.59 USD`);
-      setActiveTab('text');
-      onShowToast('Factura de Empresas Polar cargada', 'local_shipping');
-    } else if (type === 'pepsi') {
-      setSupplierName('Empresas PepsiCo Venezuela');
-      setInvoiceText(`PEPSICO ALIMENTOS S.C.A. / PEPSI-COLA VENEZUELA
-FACTURA FISCAL NRO: #PEP-88310
-FECHA: ${new Date().toLocaleDateString('es-VE')}
-DISTRIBUIDOR OFICIAL
-
-ÍTEMS DESPACHADOS:
-1. PEPSI COLA SABOR CLASICO 2 LITROS | CANT: 24 BOTELLAS | COSTO: $1.65 USD
-2. REFRESCO 7UP LIMA LIMON 1.5L | CANT: 18 BOTELLAS | COSTO: $1.40 USD
-3. SNACK DORITOS MEGA QUESO 145G | CANT: 20 PAQUETES | COSTO: $1.25 USD
-4. PAPAS FRITAS RUFFLES DE QUESO 130G | CANT: 15 PAQUETES | COSTO: $1.30 USD
-5. BEBIDA GATORADE MANDARINA 500ML | CANT: 12 BOTELLAS | COSTO: $1.10 USD
-
-TOTAL GUIA: $127.35 USD`);
-      setActiveTab('text');
-      onShowToast('Factura de PepsiCo Venezuela cargada', 'local_shipping');
-    } else {
-      setSupplierName('Distribuidora Central de Víveres');
-      setInvoiceText(`DISTRIBUIDORA CENTRAL DE VIVERES C.A.
-NOTA DE RECEPCION DE MERCANCIA #DMC-4401
-FECHA: ${new Date().toLocaleDateString('es-VE')}
-
-RELACION DE CARGA:
-1. CAFE FAMA DE AMERICA 250G | CANTIDAD: 30 PAQUETES | COSTO: $1.80 USD
-2. AZUCAR BLANCA MONTALBAN 1KG | CANTIDAD: 50 PAQUETES | COSTO: $1.05 USD
-3. PASTA PRIMOR PLUMITAS 1KG | CANTIDAD: 24 PAQUETES | COSTO: $1.15 USD
-4. MAYONESA MAVESA 445G | CANTIDAD: 12 FRASCOS | COSTO: $2.10 USD
-5. ATUN DESMENUZADO EVEBA EN ACEITE 140G | CANTIDAD: 24 LATAS | COSTO: $1.20 USD
-
-TOTAL RECIBIDO: $213.60 USD`);
-      setActiveTab('text');
-      onShowToast('Factura de Distribuidora Local cargada', 'local_shipping');
-    }
-  };
-
   // Main OpenAI gpt-4o-mini Vision Extraction Handler
   const handleAnalyzeWithAI = async () => {
     // 4. Aviso de Plan Pro (Freemium Gate Enforcement)
@@ -183,7 +139,7 @@ TOTAL RECIBIDO: $213.60 USD`);
         onOpenPaywallModal({
           title: '🔒 Alcanzaste el límite de tu versión de prueba (1/1 escaneo de facturas con IA)',
           subtitle:
-            'Has probado la lectura inteligente de facturas. Actualiza al Plan Pro para escanear facturas ilimitadas de Polar, Pepsi y tus distribuidores, inventario ilimitado y recordatorios por WhatsApp.',
+            'Has probado la lectura inteligente de facturas. Actualiza al Plan Pro para escanear facturas ilimitadas de tus distribuidores, inventario ilimitado y recordatorios por WhatsApp.',
           badge: 'Límite de Prueba con IA (1/1)',
           reason: 'invoice_ai_limit'
         });
@@ -196,7 +152,9 @@ TOTAL RECIBIDO: $213.60 USD`);
     const currentApiKey = getOpenAIApiKey();
     if (!currentApiKey) {
       setShowApiKeySettings(true);
-      onShowToast('Por favor ingresa tu clave de OpenAI (VITE_OPENAI_API_KEY) para procesar la factura', 'vpn_key');
+      const msg = 'Error: No se encontró la API Key de OpenAI (VITE_OPENAI_API_KEY). Configúrala en el archivo .env o en Vercel.';
+      alert(msg);
+      onShowToast(msg, 'error');
       return;
     }
 
@@ -308,7 +266,9 @@ TOTAL RECIBIDO: $213.60 USD`);
       );
     } catch (error: any) {
       console.error('[OpenAI Error]', error);
-      onShowToast(error?.message || 'Error al analizar la factura con OpenAI', 'error');
+      const errMsg = error?.message || 'Error al analizar la factura con OpenAI';
+      alert(errMsg);
+      onShowToast(errMsg, 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -609,18 +569,7 @@ TOTAL RECIBIDO: $213.60 USD`);
                     <span>Cámara / Subir Archivo</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('templates')}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                      activeTab === 'templates'
-                        ? 'bg-[#006c4a] text-white shadow-xs'
-                        : 'text-[#554336] hover:text-[#111c2d]'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">local_shipping</span>
-                    <span>Distribuidores de Prueba</span>
-                  </button>
+
 
                   <button
                     type="button"
@@ -761,110 +710,23 @@ TOTAL RECIBIDO: $213.60 USD`);
                 </div>
               )}
 
-              {/* Tab 2: Distributor Presets (Polar, Pepsi, Local) */}
-              {activeTab === 'templates' && (
-                <div className="space-y-3">
-                  <span className="text-xs font-bold text-[#554336] block">
-                    Selecciona una factura de ejemplo de proveedores venezolanos para probar de inmediato:
-                  </span>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Polar */}
-                    <button
-                      type="button"
-                      onClick={() => handleLoadTemplate('polar')}
-                      className="p-4 rounded-2xl bg-white hover:bg-[#FAF8F5] border-2 border-[#dbc2b0]/40 hover:border-[#006c4a] transition-all text-left flex flex-col justify-between gap-3 shadow-xs cursor-pointer group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="w-10 h-10 rounded-xl bg-[#006c4a]/10 text-[#006c4a] flex items-center justify-center font-black text-sm">
-                          POL
-                        </div>
-                        <span className="material-symbols-outlined text-[#006c4a] text-[20px] group-hover:translate-x-1 transition-transform">
-                          arrow_forward
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="font-black text-xs text-[#111c2d]">Empresas Polar C.A.</h4>
-                        <p className="text-[11px] text-[#554336] mt-0.5">
-                          Harina PAN, Arroz Mary, Margarina Mavesa, Maltín Polar, Aceite Vatel.
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-black text-[#006c4a] uppercase">5 Productos • $186.59</span>
-                    </button>
-
-                    {/* Pepsi */}
-                    <button
-                      type="button"
-                      onClick={() => handleLoadTemplate('pepsi')}
-                      className="p-4 rounded-2xl bg-white hover:bg-[#FAF8F5] border-2 border-[#dbc2b0]/40 hover:border-[#006c4a] transition-all text-left flex flex-col justify-between gap-3 shadow-xs cursor-pointer group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="w-10 h-10 rounded-xl bg-[#004e92]/10 text-[#004e92] flex items-center justify-center font-black text-sm">
-                          PEP
-                        </div>
-                        <span className="material-symbols-outlined text-[#004e92] text-[20px] group-hover:translate-x-1 transition-transform">
-                          arrow_forward
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="font-black text-xs text-[#111c2d]">PepsiCo Venezuela</h4>
-                        <p className="text-[11px] text-[#554336] mt-0.5">
-                          Pepsi Cola 2L, 7Up 1.5L, Doritos Queso, Ruffles, Gatorade 500ml.
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-black text-[#004e92] uppercase">5 Productos • $127.35</span>
-                    </button>
-
-                    {/* Distribuidora Local */}
-                    <button
-                      type="button"
-                      onClick={() => handleLoadTemplate('local')}
-                      className="p-4 rounded-2xl bg-white hover:bg-[#FAF8F5] border-2 border-[#dbc2b0]/40 hover:border-[#8d4b00] transition-all text-left flex flex-col justify-between gap-3 shadow-xs cursor-pointer group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="w-10 h-10 rounded-xl bg-[#8d4b00]/10 text-[#8d4b00] flex items-center justify-center font-black text-sm">
-                          DIS
-                        </div>
-                        <span className="material-symbols-outlined text-[#8d4b00] text-[20px] group-hover:translate-x-1 transition-transform">
-                          arrow_forward
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="font-black text-xs text-[#111c2d]">Distribuidora Local</h4>
-                        <p className="text-[11px] text-[#554336] mt-0.5">
-                          Café Fama de América, Azúcar Montalbán, Pasta Primor, Mayonesa.
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-black text-[#8d4b00] uppercase">5 Productos • $213.60</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Tab 3: Text Input */}
+              {/* Tab 2: Text Input */}
               {activeTab === 'text' && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-[#554336]">
                       Texto, transcripción o mensaje de WhatsApp de la factura:
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => handleLoadTemplate('polar')}
-                      className="text-[11px] text-[#8d4b00] font-bold hover:underline"
-                    >
-                      Cargar ejemplo de Polar
-                    </button>
                   </div>
                   <textarea
                     rows={6}
                     value={invoiceText}
                     onChange={(e) => setInvoiceText(e.target.value)}
-                    placeholder="Pega aquí el detalle de la factura. Ejemplo:
-Empresas Polar - Factura #1234
-40 Harina PAN 1kg a $0.98 c/u
-24 Arroz Mary 1kg a $1.12 c/u
-20 Margarina Mavesa 500g a $1.75 c/u..."
+                    placeholder="Pega aquí el detalle o texto de la factura. Ejemplo:
+Distribuidora Central - Factura #1029
+10 Leche Líquida 1L a $1.40 c/u
+15 Azúcar Refinada 1kg a $1.10 c/u
+20 Pasta Corta 1kg a $1.25 c/u..."
                     className="w-full p-4 rounded-2xl bg-[#FAF8F5] text-[#111c2d] text-xs font-mono border border-[#dbc2b0]/40 focus:outline-none focus:ring-2 focus:ring-[#006c4a] focus:bg-white leading-relaxed"
                   />
                 </div>

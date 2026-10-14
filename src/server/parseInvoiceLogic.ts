@@ -43,160 +43,7 @@ export interface ParseInvoiceResponse {
   fallback?: boolean;
 }
 
-function generateSmartFallback(payload: ParseInvoiceRequest): ParseInvoiceResponse {
-  const rate = payload.exchangeRate || 65.0;
-  const rawText = (payload.text || '').toLowerCase();
 
-  // 1. PepsiCo / Pepsi Invoice Fallback
-  if (rawText.includes('pepsi') || rawText.includes('gatorade') || rawText.includes('dorito') || rawText.includes('ruffle') || rawText.includes('7up')) {
-    const supplier = 'Empresas PepsiCo Venezuela';
-    const items: ParsedInvoiceItem[] = [
-      {
-        productName: 'Pepsi Cola Sabor Clásico 2 Litros',
-        productCode: 'PEP-002',
-        quantity: 24,
-        unit: 'bot.',
-        costUSD: 1.65,
-        costBs: Number((1.65 * rate).toFixed(2)),
-        suggestedPriceUSD: Number((1.65 * 1.3).toFixed(2)), // 30% margin -> 2.15
-        suggestedPriceBs: Number((1.65 * 1.3 * rate).toFixed(2)),
-        marginPercent: 30,
-        category: 'Bebidas y Refrescos',
-        isNewProduct: !payload.catalog.some(c => c.name.toLowerCase().includes('pepsi'))
-      },
-      {
-        productName: 'Refresco 7Up Lima Limón 1.5L',
-        productCode: '7UP-015',
-        quantity: 18,
-        unit: 'bot.',
-        costUSD: 1.40,
-        costBs: Number((1.40 * rate).toFixed(2)),
-        suggestedPriceUSD: Number((1.40 * 1.3).toFixed(2)),
-        suggestedPriceBs: Number((1.40 * 1.3 * rate).toFixed(2)),
-        marginPercent: 30,
-        category: 'Bebidas y Refrescos',
-        isNewProduct: !payload.catalog.some(c => c.name.toLowerCase().includes('7up'))
-      },
-      {
-        productName: 'Snack Doritos Mega Queso 145g',
-        productCode: 'DOR-145',
-        quantity: 20,
-        unit: 'paq.',
-        costUSD: 1.25,
-        costBs: Number((1.25 * rate).toFixed(2)),
-        suggestedPriceUSD: Number((1.25 * 1.3).toFixed(2)),
-        suggestedPriceBs: Number((1.25 * 1.3 * rate).toFixed(2)),
-        marginPercent: 30,
-        category: 'Víveres Secos',
-        isNewProduct: !payload.catalog.some(c => c.name.toLowerCase().includes('dorito'))
-      },
-      {
-        productName: 'Papas Fritas Ruffles de Queso 130g',
-        productCode: 'RUF-130',
-        quantity: 15,
-        unit: 'paq.',
-        costUSD: 1.30,
-        costBs: Number((1.30 * rate).toFixed(2)),
-        suggestedPriceUSD: Number((1.30 * 1.3).toFixed(2)),
-        suggestedPriceBs: Number((1.30 * 1.3 * rate).toFixed(2)),
-        marginPercent: 30,
-        category: 'Víveres Secos',
-        isNewProduct: !payload.catalog.some(c => c.name.toLowerCase().includes('ruffle'))
-      }
-    ];
-
-    const totalUSD = items.reduce((acc, i) => acc + i.quantity * i.costUSD, 0);
-    return {
-      supplier,
-      invoiceNumber: 'FAC-PEP-88310',
-      date: new Date().toLocaleDateString('es-VE'),
-      totalInvoiceAmountUSD: Number(totalUSD.toFixed(2)),
-      totalInvoiceAmountBs: Number((totalUSD * rate).toFixed(2)),
-      items,
-      notes: 'Factura procesada (Proveedor: PepsiCo Venezuela). Precios sugeridos con 30% de margen.',
-      fallback: false
-    };
-  }
-
-  // 2. Default Polar & Distribution Wholesale Fallback
-  const supplier = rawText.includes('distribuidora') ? 'Distribuidora Mayorista Los Andes' : 'Empresas Polar C.A.';
-  const items: ParsedInvoiceItem[] = [
-    {
-      productName: 'Harina PAN Blanca 1kg',
-      productCode: 'PAN-001',
-      quantity: 40,
-      unit: 'paq.',
-      costUSD: 0.98,
-      costBs: Number((0.98 * rate).toFixed(2)),
-      suggestedPriceUSD: Number((0.98 * 1.3).toFixed(2)), // 1.27
-      suggestedPriceBs: Number((0.98 * 1.3 * rate).toFixed(2)),
-      marginPercent: 30,
-      category: 'Víveres Secos',
-      isNewProduct: !payload.catalog.some(c => c.name.toLowerCase().includes('harina pan'))
-    },
-    {
-      productName: 'Arroz Mary Tradicional 1kg',
-      productCode: 'ARR-014',
-      quantity: 24,
-      unit: 'paq.',
-      costUSD: 1.12,
-      costBs: Number((1.12 * rate).toFixed(2)),
-      suggestedPriceUSD: Number((1.12 * 1.3).toFixed(2)),
-      suggestedPriceBs: Number((1.12 * 1.3 * rate).toFixed(2)),
-      marginPercent: 30,
-      category: 'Víveres Secos',
-      isNewProduct: !payload.catalog.some(c => c.name.toLowerCase().includes('arroz mary'))
-    },
-    {
-      productName: 'Margarina Mavesa con Sal 500g',
-      productCode: 'MAV-500',
-      quantity: 20,
-      unit: 'tarr.',
-      costUSD: 1.75,
-      costBs: Number((1.75 * rate).toFixed(2)),
-      suggestedPriceUSD: Number((1.75 * 1.3).toFixed(2)),
-      suggestedPriceBs: Number((1.75 * 1.3 * rate).toFixed(2)),
-      marginPercent: 30,
-      category: 'Lácteos y Charcutería',
-      isNewProduct: !payload.catalog.some(c => c.name.toLowerCase().includes('mavesa'))
-    },
-    {
-      productName: 'Bebida de Malta Maltín Polar 250ml',
-      productCode: 'MAL-250',
-      quantity: 48,
-      unit: 'bot.',
-      costUSD: 0.62,
-      costBs: Number((0.62 * rate).toFixed(2)),
-      suggestedPriceUSD: Number((0.62 * 1.3).toFixed(2)),
-      suggestedPriceBs: Number((0.62 * 1.3 * rate).toFixed(2)),
-      marginPercent: 30,
-      category: 'Bebidas y Refrescos',
-      isNewProduct: !payload.catalog.some(c => c.name.toLowerCase().includes('maltin'))
-    }
-  ];
-
-  // Try matching any items to catalog
-  items.forEach(item => {
-    const match = payload.catalog.find(c => c.name.toLowerCase() === item.productName.toLowerCase());
-    if (match) {
-      item.productId = match.id;
-      item.productCode = match.code;
-      item.isNewProduct = false;
-    }
-  });
-
-  const totalUSD = items.reduce((acc, i) => acc + i.quantity * i.costUSD, 0);
-  return {
-    supplier,
-    invoiceNumber: 'FAC-POL-99412',
-    date: new Date().toLocaleDateString('es-VE'),
-    totalInvoiceAmountUSD: Number(totalUSD.toFixed(2)),
-    totalInvoiceAmountBs: Number((totalUSD * rate).toFixed(2)),
-    items,
-    notes: `Factura procesada (${supplier}). Precios de costo y venta calculados con tasa BCV ${rate.toFixed(2)} Bs/$ y margen 30%.`,
-    fallback: false
-  };
-}
 
 export async function processInvoiceWithOpenAI(
   payload: ParseInvoiceRequest,
@@ -308,12 +155,17 @@ Extrae en formato JSON estricto:
     }
 
     const parsed = JSON.parse(content.trim());
-    const rawItems: any[] = Array.isArray(parsed.items) ? parsed.items : [];
+    const rawItems: any[] = Array.isArray(parsed.productos)
+      ? parsed.productos
+      : Array.isArray(parsed.items)
+      ? parsed.items
+      : [];
 
     const items: ParsedInvoiceItem[] = rawItems.map((raw) => {
-      const productName = String(raw.productName || 'Producto').trim();
-      const quantity = Math.max(1, Number(raw.quantity) || 1);
-      const costUSD = Math.max(0.01, Number(raw.costUSD) || 1.0);
+      const productName = String(raw.nombre || raw.productName || 'Producto').trim();
+      const quantity = Math.max(1, Number(raw.cantidad || raw.quantity) || 1);
+      const rawCost = Number(raw.costo_unitario ?? raw.costUSD ?? 1.0);
+      const costUSD = Math.max(0.01, Number(rawCost.toFixed(2)) || 1.0);
       const costBs = Number((costUSD * rate).toFixed(2));
       const margin = 30;
       const suggestedUSD = Number((costUSD * 1.3).toFixed(2));
@@ -355,9 +207,9 @@ Extrae en formato JSON estricto:
       notes: parsed.notes || 'Factura procesada con OpenAI gpt-4o-mini',
       fallback: false
     };
-  } catch (err) {
+  } catch (err: any) {
     console.error('[OpenAI Server] Fallo al procesar:', err);
-    return generateSmartFallback(payload);
+    throw new Error(err?.message || 'Error al procesar la factura con OpenAI');
   }
 }
 
@@ -368,17 +220,17 @@ export async function processInvoiceWithGemini(
   if (openAIKey) {
     try {
       const openAiResult = await processInvoiceWithOpenAI(payload, openAIKey);
-      if (openAiResult && !openAiResult.fallback) {
+      if (openAiResult) {
         return openAiResult;
       }
     } catch {
-      // Continue to Gemini or fallback
+      // Continue to Gemini
     }
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return generateSmartFallback(payload);
+    throw new Error('No se encontró clave de API configurada para procesar la factura.');
   }
 
   const ai = new GoogleGenAI({
@@ -435,7 +287,7 @@ ${catalogSummary || '(Catálogo actualmente vacío)'}
         text: `Texto o transcripción de la factura de proveedor:\n${payload.text}`
       });
     } else if (!payload.imageBase64) {
-      return generateSmartFallback(payload);
+      throw new Error('No se proporcionó imagen ni texto de factura para analizar.');
     }
 
     parts.push({
@@ -587,10 +439,10 @@ ${catalogSummary || '(Catálogo actualmente vacío)'}
       return parsed;
     }
 
-    return generateSmartFallback(payload);
-  } catch (error) {
-    console.error('Gemini invoice parse error, using smart distributor fallback:', error);
-    return generateSmartFallback(payload);
+    throw new Error('No se obtuvo respuesta del modelo de visión.');
+  } catch (error: any) {
+    console.error('Invoice parse error:', error);
+    throw new Error(error?.message || 'Error al procesar la factura con IA.');
   }
 }
 
