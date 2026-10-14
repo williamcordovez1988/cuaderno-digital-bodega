@@ -1,12 +1,48 @@
 export interface Organization {
   id: string;
   nombre_negocio: string;
-  plan_suscripcion: 'trial' | 'prueba' | 'gratuito' | 'basico' | 'emprendedor' | 'pro' | string;
+  plan_suscripcion: 'trial' | 'prueba' | 'gratuito' | 'basico' | 'emprendedor' | 'pro' | 'premium' | string;
   fecha_registro: string;
   telefono?: string;
   direccion?: string;
   logoUrl?: string;
   ai_scans_used?: number;
+  ownerEmail?: string;
+  ownerName?: string;
+  subscriptionStatus?: 'active' | 'paused' | 'expired';
+  subscriptionExpiryDate?: string;
+  productsCount?: number;
+  paymentNotes?: string;
+}
+
+export const SUPER_ADMIN_EMAILS = [
+  'williamcordovezcn@gmail.com',
+  'williamcordovez@gmail.com'
+];
+
+export function isSuperAdmin(email?: string | null): boolean {
+  if (!email) return false;
+  return SUPER_ADMIN_EMAILS.includes(email.trim().toLowerCase());
+}
+
+export const PLAN_PRICING = {
+  gratuito: 0,
+  trial: 0,
+  prueba: 0,
+  pro: 9.99,
+  premium: 19.99
+};
+
+export interface OrganizationAdminRecord extends Organization {
+  ownerEmail: string;
+  ownerName: string;
+  ownerPhone: string;
+  productsCount: number;
+  customersCount?: number;
+  totalSalesUSD?: number;
+  subscriptionStatus: 'active' | 'paused' | 'expired';
+  subscriptionExpiryDate: string;
+  paymentNotes?: string;
 }
 
 export function isTrialPlan(plan?: string | null): boolean {

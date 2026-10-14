@@ -24,7 +24,8 @@ import {
   canManageTeam,
   canManageInventory,
   canViewReports,
-  canViewFiados
+  canViewFiados,
+  isSuperAdmin
 } from './firebase/types';
 import {
   subscribeToProducts,
@@ -68,6 +69,7 @@ import { CashChangeModal } from './components/CashChangeModal';
 import { CargarFacturaModal } from './components/CargarFacturaModal';
 import { AuthView } from './components/AuthView';
 import { LandingPage } from './components/LandingPage';
+import { MasterAdminView } from './components/MasterAdminView';
 import { PaywallModal } from './components/PaywallModal';
 import { Toast } from './components/Toast';
 import {
@@ -568,6 +570,20 @@ export default function App() {
 
   // Public routing when not authenticated:
   if (!currentUser) {
+    if (currentPath === '/master-admin') {
+      return (
+        <>
+          <AuthView
+            initialMode="login"
+            onAuthSuccess={handleAuthSuccess}
+            onNavigate={navigate}
+            onShowToast={showToast}
+          />
+          <Toast message="Inicia sesión con la cuenta de Creador para acceder al Panel Maestro" icon="admin_panel_settings" />
+        </>
+      );
+    }
+
     if (currentPath === '/login' || currentPath === '/register') {
       return (
         <>
@@ -595,6 +611,66 @@ export default function App() {
         <Toast message={toastMessage} icon={toastIcon} />
       </>
     );
+  }
+
+  // Master Admin Route (/master-admin): Strictly restricted to Super Admin (William Cordovez)
+  if (currentPath === '/master-admin') {
+    if (isSuperAdmin(currentUser?.email || userProfile?.email)) {
+      return (
+        <>
+          <MasterAdminView
+            bcvRate={settings.bcvExchangeRate}
+            onNavigateHome={() => {
+              navigate('/');
+              setCurrentTab('registro');
+            }}
+            onShowToast={showToast}
+          />
+          <Toast message={toastMessage} icon={toastIcon} />
+        </>
+      );
+    } else {
+      return (
+        <div className="bg-[#FAF8F5] text-[#111C2D] antialiased min-h-screen flex flex-col">
+          <Header
+            currentTab={currentTab}
+            setCurrentTab={setCurrentTab}
+            settings={settings}
+            onUpdateExchangeRate={handleUpdateExchangeRate}
+            onFetchExchangeRateNow={handleFetchRateNow}
+            isFetchingRate={isFetchingRate}
+            pendingDebtsCount={customers.filter((c) => c.currentDebtUSD > 0).length}
+            totalProductsCount={products.length}
+            todaySalesUSD={sales.filter((s) => s.status === 'saldada').reduce((acc, s) => acc + s.totalUSD, 0)}
+            currentUser={currentUser}
+            organization={organization}
+            userProfile={userProfile}
+            onLogout={handleLogout}
+            onNavigateLanding={() => navigate('/landing')}
+            onNavigateMasterAdmin={() => navigate('/master-admin')}
+            onShowToast={showToast}
+          />
+          <main className="w-full pt-32 pb-20 flex-1 flex items-center justify-center px-4">
+            <div className="bg-white p-8 rounded-3xl border border-rose-200 text-center max-w-md shadow-lg">
+              <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 mx-auto flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-[36px]">lock</span>
+              </div>
+              <h2 className="text-lg font-black text-[#111c2d]">Acceso Restringido</h2>
+              <p className="text-xs text-[#554336] mt-2 mb-6 leading-relaxed">
+                El <strong>Panel Maestro del SaaS</strong> es de acceso exclusivo para el Creador y Super Admin de la plataforma. Tu usuario actual no cuenta con privilegios globales.
+              </p>
+              <button
+                onClick={() => navigate('/')}
+                className="w-full py-2.5 px-4 bg-[#8d4b00] hover:bg-[#713c00] text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Volver a la Operación de Mi Bodega
+              </button>
+            </div>
+          </main>
+          <Toast message="Acceso denegado: Vista exclusiva del Creador" icon="lock" />
+        </div>
+      );
+    }
   }
 
   // If user is authenticated, but specifically navigates to the public landing page (/landing)
@@ -638,6 +714,7 @@ export default function App() {
         userProfile={userProfile}
         onLogout={handleLogout}
         onNavigateLanding={() => navigate('/landing')}
+        onNavigateMasterAdmin={() => navigate('/master-admin')}
         onShowToast={showToast}
       />
 

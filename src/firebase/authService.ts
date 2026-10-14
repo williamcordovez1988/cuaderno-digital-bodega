@@ -9,6 +9,7 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from './config';
 import { Organization, UserProfile, BodegaSettings } from './types';
+import { syncOrganizationToMasterRegistry } from './firestoreService';
 
 export interface AuthSession {
   user: User | any;
@@ -67,8 +68,14 @@ export async function getOrCreateWilliamSession(): Promise<AuthSession> {
     nombre_negocio: DEFAULT_CREDENTIALS.businessName,
     plan_suscripcion: DEFAULT_CREDENTIALS.plan,
     fecha_registro: new Date().toISOString(),
-    telefono: DEFAULT_CREDENTIALS.phone
+    telefono: DEFAULT_CREDENTIALS.phone,
+    ownerEmail: DEFAULT_CREDENTIALS.email,
+    ownerName: DEFAULT_CREDENTIALS.userName,
+    subscriptionStatus: 'active',
+    subscriptionExpiryDate: '2029-12-31'
   };
+
+  syncOrganizationToMasterRegistry(organization);
 
   const profile: UserProfile = {
     id: userId,
@@ -159,8 +166,14 @@ export async function registerBusiness({
       id: orgId,
       nombre_negocio: nombreNegocio.trim(),
       plan_suscripcion: planSuscripcion,
-      fecha_registro: new Date().toISOString()
+      fecha_registro: new Date().toISOString(),
+      ownerEmail: user.email || email.trim(),
+      ownerName: nombreUsuario.trim(),
+      subscriptionStatus: 'active',
+      subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
     };
+
+    syncOrganizationToMasterRegistry(organization);
 
     // 3. Create user profile linked to the new organization with role 'dueno'
     const profile: UserProfile = {
@@ -203,8 +216,13 @@ export async function registerBusiness({
         id: orgId,
         nombre_negocio: nombreNegocio.trim(),
         plan_suscripcion: planSuscripcion,
-        fecha_registro: new Date().toISOString()
+        fecha_registro: new Date().toISOString(),
+        ownerEmail: email.trim(),
+        ownerName: nombreUsuario.trim(),
+        subscriptionStatus: 'active',
+        subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
       };
+      syncOrganizationToMasterRegistry(organization);
       const profile: UserProfile = {
         id: userId,
         user_id: userId,
@@ -375,8 +393,14 @@ export async function createProfileForExistingUser(
     id: orgId,
     nombre_negocio: bName,
     plan_suscripcion: 'gratuito',
-    fecha_registro: new Date().toISOString()
+    fecha_registro: new Date().toISOString(),
+    ownerEmail: user.email || '',
+    ownerName: user.displayName || 'Bodeguero',
+    subscriptionStatus: 'active',
+    subscriptionExpiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
   };
+
+  syncOrganizationToMasterRegistry(organization);
 
   const profile: UserProfile = {
     id: user.uid,

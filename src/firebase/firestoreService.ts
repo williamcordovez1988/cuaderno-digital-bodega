@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './config';
 import { handleFirestoreError, OperationType } from './errors';
-import { Product, Customer, Sale, LedgerEntry, BodegaSettings, UserProfile, isTrialPlan } from './types';
+import { Product, Customer, Sale, LedgerEntry, BodegaSettings, UserProfile, isTrialPlan, Organization, OrganizationAdminRecord } from './types';
 
 const PRODUCTS_COLLECTION = 'products';
 const CUSTOMERS_COLLECTION = 'customers';
@@ -1283,5 +1283,278 @@ export async function incrementOrgAiScansCount(orgId?: string | null): Promise<n
     }
   }
   return next;
+}
+
+// ==========================================
+// MASTER ADMIN / SAAS OWNER DASHBOARD
+// ==========================================
+
+export const SAAS_ORGANIZATIONS_REGISTRY_KEY = 'bodega_all_organizations_registry';
+
+export const INITIAL_SAAS_ORGANIZATIONS: OrganizationAdminRecord[] = [
+  {
+    id: 'org-william-cordovez',
+    nombre_negocio: 'Bodega William',
+    ownerName: 'Ing. William Cordovez',
+    ownerEmail: 'williamcordovezcn@gmail.com',
+    ownerPhone: '+584241289468',
+    plan_suscripcion: 'pro',
+    subscriptionStatus: 'active',
+    subscriptionExpiryDate: '2029-12-31',
+    fecha_registro: '2026-01-15T10:00:00.000Z',
+    productsCount: 14,
+    ai_scans_used: 6,
+    paymentNotes: 'Cuenta Principal SaaS Master Admin'
+  },
+  {
+    id: 'org-bodega-san-jose',
+    nombre_negocio: 'Bodega San José',
+    ownerName: 'Carlos Mendoza',
+    ownerEmail: 'carlos.mendoza@gmail.com',
+    ownerPhone: '+584141234567',
+    plan_suscripcion: 'pro',
+    subscriptionStatus: 'active',
+    subscriptionExpiryDate: '2026-11-20',
+    fecha_registro: '2026-02-10T14:30:00.000Z',
+    productsCount: 42,
+    ai_scans_used: 14,
+    paymentNotes: 'Pago Móvil Mercantil Ref: 894102'
+  },
+  {
+    id: 'org-abasto-el-ahorro',
+    nombre_negocio: 'Abasto El Ahorro Central',
+    ownerName: 'Carmen Rodríguez',
+    ownerEmail: 'carmen.ahorro@gmail.com',
+    ownerPhone: '+584245558899',
+    plan_suscripcion: 'premium',
+    subscriptionStatus: 'active',
+    subscriptionExpiryDate: '2026-12-05',
+    fecha_registro: '2026-03-01T09:15:00.000Z',
+    productsCount: 185,
+    ai_scans_used: 38,
+    paymentNotes: 'Binance Pay USDT Ref: 981245'
+  },
+  {
+    id: 'org-minimarket-chacao',
+    nombre_negocio: 'Minimarket Express Chacao',
+    ownerName: 'José Hernández',
+    ownerEmail: 'j.hernandez@expressmarket.ve',
+    ownerPhone: '+584163334411',
+    plan_suscripcion: 'pro',
+    subscriptionStatus: 'paused',
+    subscriptionExpiryDate: '2026-10-15',
+    fecha_registro: '2026-03-12T16:20:00.000Z',
+    productsCount: 38,
+    ai_scans_used: 9,
+    paymentNotes: 'Pausado temporal por remodelación'
+  },
+  {
+    id: 'org-viveres-don-pedro',
+    nombre_negocio: 'Víveres Don Pedro',
+    ownerName: 'Pedro Morales',
+    ownerEmail: 'donpedro.viveres@gmail.com',
+    ownerPhone: '+584249991122',
+    plan_suscripcion: 'gratuito',
+    subscriptionStatus: 'active',
+    subscriptionExpiryDate: '2026-11-15',
+    fecha_registro: '2026-04-05T11:45:00.000Z',
+    productsCount: 5,
+    ai_scans_used: 1,
+    paymentNotes: 'Plan Prueba Gratuito (Límite 5 productos)'
+  },
+  {
+    id: 'org-delicateses-teques',
+    nombre_negocio: 'Delicateses Los Teques',
+    ownerName: 'María Eugenia Soto',
+    ownerEmail: 'mariaeugenia.soto@gmail.com',
+    ownerPhone: '+584128882233',
+    plan_suscripcion: 'gratuito',
+    subscriptionStatus: 'expired',
+    subscriptionExpiryDate: '2026-02-28',
+    fecha_registro: '2026-01-20T08:00:00.000Z',
+    productsCount: 4,
+    ai_scans_used: 1,
+    paymentNotes: 'Pendiente confirmación de pago Pro'
+  }
+];
+
+export function syncOrganizationToMasterRegistry(org: Partial<OrganizationAdminRecord>): void {
+  try {
+    const raw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
+    let list: OrganizationAdminRecord[] = raw ? JSON.parse(raw) : [...INITIAL_SAAS_ORGANIZATIONS];
+    const idx = list.findIndex(item => item.id === org.id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...org };
+    } else if (org.id) {
+      list.unshift({
+        id: org.id,
+        nombre_negocio: org.nombre_negocio || 'Nuevo Comercio',
+        ownerName: org.ownerName || 'Propietario',
+        ownerEmail: org.ownerEmail || '',
+        ownerPhone: org.ownerPhone || org.telefono || '',
+        plan_suscripcion: org.plan_suscripcion || 'gratuito',
+        subscriptionStatus: org.subscriptionStatus || 'active',
+        subscriptionExpiryDate: org.subscriptionExpiryDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        fecha_registro: org.fecha_registro || new Date().toISOString(),
+        productsCount: org.productsCount || 0,
+        ai_scans_used: org.ai_scans_used || 0,
+        paymentNotes: org.paymentNotes || ''
+      });
+    }
+    localStorage.setItem(SAAS_ORGANIZATIONS_REGISTRY_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.warn('Failed to sync organization to master registry:', e);
+  }
+}
+
+export async function getAllOrganizationsForAdmin(): Promise<OrganizationAdminRecord[]> {
+  const localRaw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
+  let records: OrganizationAdminRecord[] = localRaw ? JSON.parse(localRaw) : [...INITIAL_SAAS_ORGANIZATIONS];
+
+  // Try to sync with Firestore
+  if (auth.currentUser) {
+    try {
+      const orgsSnap = await getDocs(collection(db, ORGANIZATIONS_COLLECTION));
+      if (!orgsSnap.empty) {
+        const firestoreOrgs: Organization[] = [];
+        orgsSnap.forEach(d => {
+          firestoreOrgs.push({ id: d.id, ...d.data() } as Organization);
+        });
+
+        // Also fetch profiles and products to enhance stats
+        const profilesSnap = await getDocs(collection(db, PROFILES_COLLECTION));
+        const profilesMap = new Map<string, UserProfile>();
+        profilesSnap.forEach(d => {
+          const p = d.data() as UserProfile;
+          if (p.organization_id && (p.rol === 'dueno' || p.rol === 'dueño')) {
+            profilesMap.set(p.organization_id, p);
+          }
+        });
+
+        const productsSnap = await getDocs(collection(db, PRODUCTS_COLLECTION));
+        const productsCountMap = new Map<string, number>();
+        productsSnap.forEach(d => {
+          const pr = d.data() as Product;
+          if (pr.organization_id) {
+            productsCountMap.set(pr.organization_id, (productsCountMap.get(pr.organization_id) || 0) + 1);
+          }
+        });
+
+        // Merge firestore orgs into records
+        firestoreOrgs.forEach(fo => {
+          const ownerProf = profilesMap.get(fo.id);
+          const prCount = productsCountMap.get(fo.id) || 0;
+          const existingIdx = records.findIndex(r => r.id === fo.id);
+
+          const merged: OrganizationAdminRecord = {
+            id: fo.id,
+            nombre_negocio: fo.nombre_negocio || 'Comercio',
+            ownerName: fo.ownerName || ownerProf?.nombre || (existingIdx >= 0 ? records[existingIdx].ownerName : 'Dueño'),
+            ownerEmail: fo.ownerEmail || ownerProf?.email || (existingIdx >= 0 ? records[existingIdx].ownerEmail : ''),
+            ownerPhone: fo.telefono || (existingIdx >= 0 ? records[existingIdx].ownerPhone : ''),
+            plan_suscripcion: fo.plan_suscripcion || (existingIdx >= 0 ? records[existingIdx].plan_suscripcion : 'gratuito'),
+            subscriptionStatus: fo.subscriptionStatus || (existingIdx >= 0 ? records[existingIdx].subscriptionStatus : 'active'),
+            subscriptionExpiryDate: fo.subscriptionExpiryDate || (existingIdx >= 0 ? records[existingIdx].subscriptionExpiryDate : new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]),
+            fecha_registro: fo.fecha_registro || (existingIdx >= 0 ? records[existingIdx].fecha_registro : new Date().toISOString()),
+            productsCount: prCount || (existingIdx >= 0 ? records[existingIdx].productsCount : 0),
+            ai_scans_used: typeof fo.ai_scans_used === 'number' ? fo.ai_scans_used : (existingIdx >= 0 ? records[existingIdx].ai_scans_used : 0),
+            logoUrl: fo.logoUrl,
+            paymentNotes: fo.paymentNotes || (existingIdx >= 0 ? records[existingIdx].paymentNotes : '')
+          };
+
+          if (existingIdx >= 0) {
+            records[existingIdx] = merged;
+          } else {
+            records.unshift(merged);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Could not read organizations from Firestore, using registry cache:', e);
+    }
+  }
+
+  // Update local storage cache
+  localStorage.setItem(SAAS_ORGANIZATIONS_REGISTRY_KEY, JSON.stringify(records));
+  return records;
+}
+
+export async function updateOrganizationPlanAndStatus(
+  orgId: string,
+  updates: Partial<OrganizationAdminRecord>
+): Promise<void> {
+  // Update local registry
+  const raw = localStorage.getItem(SAAS_ORGANIZATIONS_REGISTRY_KEY);
+  let records: OrganizationAdminRecord[] = raw ? JSON.parse(raw) : [...INITIAL_SAAS_ORGANIZATIONS];
+  const idx = records.findIndex(r => r.id === orgId);
+  if (idx >= 0) {
+    records[idx] = { ...records[idx], ...updates };
+  } else {
+    records.push({ id: orgId, ...updates } as OrganizationAdminRecord);
+  }
+  localStorage.setItem(SAAS_ORGANIZATIONS_REGISTRY_KEY, JSON.stringify(records));
+
+  // If this organization is the currently active organization in the session, update it
+  try {
+    const rawSession = localStorage.getItem('bodega_active_session');
+    if (rawSession) {
+      const session = JSON.parse(rawSession);
+      if (session.organization && session.organization.id === orgId) {
+        session.organization = { ...session.organization, ...updates };
+        localStorage.setItem('bodega_active_session', JSON.stringify(session));
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to update active session:', e);
+  }
+
+  // Persist to Firestore
+  if (auth.currentUser) {
+    try {
+      await setDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), updates, { merge: true });
+    } catch (e) {
+      console.warn('Failed to persist organization update to Firestore:', e);
+    }
+  }
+}
+
+export async function createManualOrganization(
+  data: {
+    nombre_negocio: string;
+    ownerName: string;
+    ownerEmail: string;
+    ownerPhone?: string;
+    plan_suscripcion: 'gratuito' | 'pro' | 'premium';
+    subscriptionExpiryDate?: string;
+    paymentNotes?: string;
+  }
+): Promise<OrganizationAdminRecord> {
+  const orgId = `org-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const newRecord: OrganizationAdminRecord = {
+    id: orgId,
+    nombre_negocio: data.nombre_negocio.trim(),
+    ownerName: data.ownerName.trim(),
+    ownerEmail: data.ownerEmail.trim().toLowerCase(),
+    ownerPhone: data.ownerPhone?.trim() || '',
+    plan_suscripcion: data.plan_suscripcion,
+    subscriptionStatus: 'active',
+    subscriptionExpiryDate: data.subscriptionExpiryDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+    fecha_registro: new Date().toISOString(),
+    productsCount: 0,
+    ai_scans_used: 0,
+    paymentNotes: data.paymentNotes?.trim() || 'Registrado manualmente por Master Admin'
+  };
+
+  syncOrganizationToMasterRegistry(newRecord);
+
+  if (auth.currentUser) {
+    try {
+      await setDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), newRecord);
+    } catch (e) {
+      console.warn('Failed to save manual organization to Firestore:', e);
+    }
+  }
+
+  return newRecord;
 }
 

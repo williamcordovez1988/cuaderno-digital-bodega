@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BodegaSettings, Organization, UserProfile, isOwner, isAdmin, isEmployee } from '../firebase/types';
+import { BodegaSettings, Organization, UserProfile, isOwner, isAdmin, isEmployee, isSuperAdmin } from '../firebase/types';
 import { logoutUser } from '../firebase/config';
 import { User } from 'firebase/auth';
 
@@ -18,6 +18,7 @@ interface HeaderProps {
   userProfile?: UserProfile | null;
   onLogout?: () => void;
   onNavigateLanding?: () => void;
+  onNavigateMasterAdmin?: () => void;
   onShowToast: (msg: string, icon?: string) => void;
 }
 
@@ -36,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   userProfile,
   onLogout,
   onNavigateLanding,
+  onNavigateMasterAdmin,
   onShowToast
 }) => {
   const [isEditingRate, setIsEditingRate] = useState(false);
@@ -51,6 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isUserOwner = isOwner(userRole);
   const isUserAdmin = isAdmin(userRole);
   const isUserEmployee = isEmployee(userRole);
+  const isCreatorSuperAdmin = isSuperAdmin(currentUser?.email || userProfile?.email);
   const logoUrl = settings.logoUrl || organization?.logoUrl;
 
   const handleSaveRate = () => {
@@ -206,6 +209,19 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                       <span className="material-symbols-outlined text-[17px]">settings</span>
                       Configuración
+                    </button>
+                  )}
+
+                  {/* Panel Maestro del Creador / Super Admin: Exclusive to William Cordovez */}
+                  {isCreatorSuperAdmin && onNavigateMasterAdmin && (
+                    <button
+                      type="button"
+                      onClick={onNavigateMasterAdmin}
+                      title="Panel Maestro del Creador (SaaS Super Admin)"
+                      className="px-3.5 py-2 text-xs font-black transition-all rounded-lg flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-amber-500 to-amber-700 hover:brightness-110 text-white shadow-sm border border-amber-400/40 active:scale-95 ml-1"
+                    >
+                      <span className="material-symbols-outlined text-[17px]">admin_panel_settings</span>
+                      <span>👑 Panel Maestro</span>
                     </button>
                   )}
                 </>
@@ -468,6 +484,26 @@ export const Header: React.FC<HeaderProps> = ({
                       <span className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-[18px]">settings</span>
                         Configuración del Negocio
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Panel Maestro: Exclusive to William Cordovez */}
+                  {isCreatorSuperAdmin && onNavigateMasterAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileDropdownOpen(false);
+                        onNavigateMasterAdmin();
+                      }}
+                      className="w-full px-3.5 py-2.5 text-xs font-black rounded-xl flex items-center justify-between cursor-pointer bg-gradient-to-r from-amber-500 to-amber-700 text-white shadow-sm mt-1"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
+                        👑 Panel Maestro (Super Admin)
+                      </span>
+                      <span className="text-[10px] uppercase font-bold bg-white/20 px-1.5 py-0.5 rounded">
+                        Creador
                       </span>
                     </button>
                   )}
