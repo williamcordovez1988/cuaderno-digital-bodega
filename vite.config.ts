@@ -38,7 +38,7 @@ export default defineConfig(() => {
               return;
             }
 
-            if (req.url === '/api/gemini/parse-invoice' && req.method === 'POST') {
+            if ((req.url === '/api/gemini/parse-invoice' || req.url === '/api/openai/parse-invoice') && req.method === 'POST') {
               let body = '';
               req.on('data', (chunk) => {
                 body += chunk;

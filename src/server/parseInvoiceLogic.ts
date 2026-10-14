@@ -198,9 +198,181 @@ function generateSmartFallback(payload: ParseInvoiceRequest): ParseInvoiceRespon
   };
 }
 
+export async function processInvoiceWithOpenAI(
+  payload: ParseInvoiceRequest,
+  customKey?: string
+): Promise<ParseInvoiceResponse> {
+  const apiKey = (customKey || process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+  const rate = payload.exchangeRate || 877.90;
+
+  if (!apiKey) {
+    return generateSmartFallback(payload);
+  }
+
+  const catalogSummary = payload.catalog
+    .slice(0, 40)
+    .map((c) => `- [${c.code}] ${c.name} (Costo actual: $${c.costUSD}, Precio actual: $${c.priceUSD}, Unidad: ${c.unit})`)
+    .join('\n');
+
+  const systemInstructions = `Eres un asistente de visión artificial y contabilidad experto para bodegas y minimarkets en Venezuela ("Cuaderno Digital").
+Tu misión es procesar la imagen o texto de la factura de compra de un proveedor mayorista (Empresas Polar, PepsiCo Venezuela, Alimentos Mary, Distribuidora, etc.).
+Tasa BCV oficial: ${rate} Bs/USD.
+
+Extrae en formato JSON estricto:
+{
+  "supplier": "Nombre de la empresa o distribuidor",
+  "invoiceNumber": "Número de factura si está visible",
+  "date": "Fecha del documento",
+  "totalInvoiceAmountUSD": 0.0,
+  "notes": "Notas del despacho",
+  "items": [
+    {
+      "productName": "Nombre comercial del producto",
+      "quantity": 1,
+      "costUSD": 1.0,
+      "unit": "paq./bot./lata/und.",
+      "category": "Víveres Secos / Bebidas / etc."
+    }
+  ]
+}`;
+
+  const contentParts: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [];
+
+  let imageUrl: string | undefined = undefined;
+  if (payload.imageBase64 && payload.mimeType) {
+    imageUrl = `data:${payload.mimeType};base64,${payload.imageBase64}`;
+  }
+
+  if (imageUrl) {
+    contentParts.push({
+      type: 'text',
+      text: 'Analiza visualmente la factura de proveedor y extrae en formato JSON la lista de productos (nombre, cantidad y costo unitario en USD), el proveedor, número y fecha.'
+    });
+    contentParts.push({
+      type: 'image_url',
+      image_url: {
+        url: imageUrl,
+        detail: 'high'
+      }
+    });
+  }
+
+  if (payload.text && payload.text.trim()) {
+    contentParts.push({
+      type: 'text',
+      text: `Texto de la factura:\n${payload.text.trim()}`
+    });
+  }
+
+  if (payload.catalog.length > 0) {
+    contentParts.push({
+      type: 'text',
+      text: `Catálogo de productos de la bodega:\n${catalogSummary}`
+    });
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: systemInstructions
+          },
+          {
+            role: 'user',
+            content: contentParts
+          }
+        ],
+        temperature: 0.2
+      })
+    });
+
+    if (!response.ok) {
+      console.warn(`[OpenAI Server] Error HTTP ${response.status}`);
+      return generateSmartFallback(payload);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return generateSmartFallback(payload);
+
+    const parsed = JSON.parse(content.trim());
+    const rawItems: any[] = Array.isArray(parsed.items) ? parsed.items : [];
+
+    const items: ParsedInvoiceItem[] = rawItems.map((raw) => {
+      const productName = String(raw.productName || 'Producto').trim();
+      const quantity = Math.max(1, Number(raw.quantity) || 1);
+      const costUSD = Math.max(0.01, Number(raw.costUSD) || 1.0);
+      const costBs = Number((costUSD * rate).toFixed(2));
+      const margin = 30;
+      const suggestedUSD = Number((costUSD * 1.3).toFixed(2));
+      const suggestedBs = Number((suggestedUSD * rate).toFixed(2));
+
+      const matched = payload.catalog.find(
+        (c) =>
+          c.name.toLowerCase().trim() === productName.toLowerCase().trim() ||
+          (raw.productCode && c.code.toLowerCase() === String(raw.productCode).toLowerCase())
+      );
+
+      return {
+        productId: matched?.id,
+        productName,
+        productCode: matched?.code || raw.productCode,
+        quantity,
+        unit: raw.unit || matched?.unit || 'und.',
+        costUSD,
+        costBs,
+        suggestedPriceUSD: suggestedUSD,
+        suggestedPriceBs: suggestedBs,
+        marginPercent: margin,
+        category: matched?.category || raw.category || 'Víveres Secos',
+        isNewProduct: !matched
+      };
+    });
+
+    const totalUSD =
+      Number(parsed.totalInvoiceAmountUSD) ||
+      Number(items.reduce((acc, i) => acc + i.quantity * i.costUSD, 0).toFixed(2));
+
+    return {
+      supplier: parsed.supplier || 'Proveedor Mayorista',
+      invoiceNumber: parsed.invoiceNumber || undefined,
+      date: parsed.date || new Date().toLocaleDateString('es-VE'),
+      totalInvoiceAmountUSD: totalUSD,
+      totalInvoiceAmountBs: Number((totalUSD * rate).toFixed(2)),
+      items,
+      notes: parsed.notes || 'Factura procesada con OpenAI gpt-4o-mini',
+      fallback: false
+    };
+  } catch (err) {
+    console.error('[OpenAI Server] Fallo al procesar:', err);
+    return generateSmartFallback(payload);
+  }
+}
+
 export async function processInvoiceWithGemini(
   payload: ParseInvoiceRequest
 ): Promise<ParseInvoiceResponse | { fallback: boolean; message: string }> {
+  const openAIKey = process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  if (openAIKey) {
+    try {
+      const openAiResult = await processInvoiceWithOpenAI(payload, openAIKey);
+      if (openAiResult && !openAiResult.fallback) {
+        return openAiResult;
+      }
+    } catch {
+      // Continue to Gemini or fallback
+    }
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return generateSmartFallback(payload);

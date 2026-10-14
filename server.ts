@@ -25,8 +25,8 @@ app.post('/api/gemini/parse-sale', async (req, res) => {
   }
 });
 
-// API Endpoint for Gemini Invoice photo/text parsing
-app.post('/api/gemini/parse-invoice', async (req, res) => {
+// API Endpoint for OpenAI / Gemini Invoice photo/text parsing
+app.post(['/api/gemini/parse-invoice', '/api/openai/parse-invoice'], async (req, res) => {
   try {
     const result = await processInvoiceWithGemini(req.body);
     res.json(result);

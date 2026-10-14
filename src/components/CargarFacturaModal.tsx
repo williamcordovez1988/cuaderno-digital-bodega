@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Product, InvoiceItem, InvoiceData, isTrialPlan } from '../firebase/types';
 import { getOrgAiScansCount, incrementOrgAiScansCount } from '../firebase/firestoreService';
+import { processInvoiceWithOpenAI } from '../services/openaiInvoiceService';
 
 interface CargarFacturaModalProps {
   isOpen: boolean;
@@ -168,7 +169,7 @@ TOTAL RECIBIDO: $213.60 USD`);
     }
   };
 
-  // Main Gemini Vision Extraction Handler
+  // Main OpenAI gpt-4o-mini Vision Extraction Handler
   const handleAnalyzeWithAI = async () => {
     // 4. Aviso de Plan Pro (Freemium Gate Enforcement)
     if (isTrialLimitReached) {
@@ -211,6 +212,7 @@ TOTAL RECIBIDO: $213.60 USD`);
 
       const payload = {
         text: invoiceText.trim() || undefined,
+        dataUrl: filePreview || undefined,
         imageBase64,
         mimeType,
         exchangeRate,
@@ -226,17 +228,8 @@ TOTAL RECIBIDO: $213.60 USD`);
         }))
       };
 
-      const response = await fetch('/api/gemini/parse-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al conectar con la API de Visión');
-      }
-
-      const data = await response.json();
+      // Send to OpenAI gpt-4o-mini with response_format json_object
+      const data = await processInvoiceWithOpenAI(payload);
 
       // Successfully processed! Increment trial scans counter
       const newScanCount = await incrementOrgAiScansCount(organizationId);
@@ -246,7 +239,7 @@ TOTAL RECIBIDO: $213.60 USD`);
       setSupplierName(detectedSupplier);
 
       // Match items to catalog & apply margins
-      const enrichedItems: EditableInvoiceItem[] = (data.items || []).map((item: InvoiceItem) => {
+      const enrichedItems: EditableInvoiceItem[] = (data.items || []).map((item) => {
         const cost = Number((item.costUSD || 1.0).toFixed(2));
         const costInBs = Number((cost * exchangeRate).toFixed(2));
         const margin = item.marginPercent || globalMargin;
@@ -281,8 +274,9 @@ TOTAL RECIBIDO: $213.60 USD`);
       setExtractedData(data);
       setItemsToApply(enrichedItems);
 
+      const aiLabel = data.source === 'openai' ? 'OpenAI gpt-4o-mini' : 'IA';
       onShowToast(
-        `¡IA completada! Se identificaron ${enrichedItems.length} productos de ${detectedSupplier}.`,
+        `¡${aiLabel} completada! Se identificaron ${enrichedItems.length} productos de ${detectedSupplier}.`,
         'auto_awesome'
       );
     } catch (error) {
@@ -439,7 +433,7 @@ TOTAL RECIBIDO: $213.60 USD`);
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-[#82f5c1]/40 text-[#00714e] text-[11px] font-black flex items-center gap-1">
                   <span className="material-symbols-outlined text-[13px]">auto_awesome</span>
-                  Gemini Visión 2.5
+                  OpenAI gpt-4o-mini
                 </span>
                 {isTrial && (
                   <span
@@ -665,7 +659,7 @@ TOTAL RECIBIDO: $213.60 USD`);
                             </span>
                           </div>
                           <p className="text-[11px] text-[#554336] mt-0.5">
-                            Tamaño: {(Number(selectedFile?.size || 0) / 1024).toFixed(1)} KB • Listo para procesar con Visión Gemini
+                            Tamaño: {(Number(selectedFile?.size || 0) / 1024).toFixed(1)} KB • Listo para procesar con OpenAI gpt-4o-mini
                           </p>
                         </div>
                       </div>
@@ -808,7 +802,7 @@ Empresas Polar - Factura #1234
                   ) : (
                     <span className="flex items-center gap-1 text-[#00714e] font-semibold">
                       <span className="material-symbols-outlined text-[15px]">bolt</span>
-                      Extracción en tiempo real con Inteligencia Artificial Gemini
+                      Extracción en tiempo real con OpenAI gpt-4o-mini
                     </span>
                   )}
                 </div>
@@ -828,7 +822,7 @@ Empresas Polar - Factura #1234
                   </span>
                   <span>
                     {isProcessing
-                      ? 'Analizando con Gemini...'
+                      ? 'Analizando con OpenAI gpt-4o-mini...'
                       : isTrialLimitReached
                       ? 'Desbloquear con Plan Pro'
                       : 'Analizar Factura con IA'}
