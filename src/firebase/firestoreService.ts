@@ -1411,16 +1411,31 @@ export async function getAllOrganizationsForAdmin(): Promise<OrganizationAdminRe
         const prCount = productsCountMap.get(fo.id) || 0;
         const cachedMatch = cached.find(c => c.id === fo.id);
 
+        const rawStatus = (fo.status || fo.subscriptionStatus || cachedMatch?.status || cachedMatch?.subscriptionStatus || 'active').toString().toLowerCase();
+        const statusNorm = rawStatus === 'pendiente_pago' ? 'pendiente_pago' : rawStatus === 'paused' ? 'paused' : rawStatus === 'expired' ? 'expired' : 'active';
+
+        const rawPlan = (fo.plan || fo.plan_suscripcion || cachedMatch?.plan || cachedMatch?.plan_suscripcion || 'gratuito').toString().toLowerCase();
+        const planLower = rawPlan.includes('prem') ? 'premium' : rawPlan.includes('pro') ? 'pro' : 'gratuito';
+        const planCap = planLower === 'premium' ? 'Premium' : planLower === 'pro' ? 'Pro' : 'Gratis';
+
+        const expiryIso = fo.planExpiresAt || cachedMatch?.planExpiresAt || (fo.subscriptionExpiryDate ? new Date(fo.subscriptionExpiryDate + (fo.subscriptionExpiryDate.includes('T') ? '' : 'T23:59:59')).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString());
+        const expiryDateStr = fo.subscriptionExpiryDate || cachedMatch?.subscriptionExpiryDate || expiryIso.split('T')[0];
+
         return {
           id: fo.id,
           nombre_negocio: fo.nombre_negocio || cachedMatch?.nombre_negocio || 'Comercio',
           ownerName: fo.ownerName || ownerProf?.nombre || cachedMatch?.ownerName || 'Propietario',
           ownerEmail: fo.ownerEmail || ownerProf?.email || cachedMatch?.ownerEmail || '',
-          ownerPhone: fo.telefono || cachedMatch?.ownerPhone || '',
-          plan_suscripcion: fo.plan_suscripcion || cachedMatch?.plan_suscripcion || 'gratuito',
-          subscriptionStatus: fo.subscriptionStatus || cachedMatch?.subscriptionStatus || 'active',
-          subscriptionExpiryDate: fo.subscriptionExpiryDate || cachedMatch?.subscriptionExpiryDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+          ownerPhone: fo.ownerPhone || fo.telefono || cachedMatch?.ownerPhone || '',
+          plan: fo.plan || planCap,
+          plan_suscripcion: planLower,
+          status: statusNorm,
+          subscriptionStatus: statusNorm,
+          subscriptionExpiryDate: expiryDateStr,
+          planExpiresAt: expiryIso,
           fecha_registro: fo.fecha_registro || cachedMatch?.fecha_registro || new Date().toISOString(),
+          createdAt: fo.createdAt || fo.fecha_registro || cachedMatch?.createdAt || new Date().toISOString(),
+          updatedAt: fo.updatedAt || '',
           productsCount: prCount || cachedMatch?.productsCount || 0,
           ai_scans_used: typeof fo.ai_scans_used === 'number' ? fo.ai_scans_used : (cachedMatch?.ai_scans_used || 0),
           logoUrl: fo.logoUrl || cachedMatch?.logoUrl,

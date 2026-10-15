@@ -166,21 +166,54 @@ export default function App() {
     // Check stored session immediately (provides instant login persistence)
     const stored = getActiveStoredSession();
     if (stored) {
-      setCurrentUser(stored.user);
-      setUserProfile(stored.profile);
-      setOrganization(stored.organization);
-      setActiveOrganizationId(stored.organization.id);
-      setIsAuthChecking(false);
+      const isSuper = isSuperAdmin(stored.user?.email || stored.profile?.email);
+      const isPending = !isSuper && (
+        stored.organization?.status === 'pendiente_pago' ||
+        stored.organization?.subscriptionStatus === 'pendiente_pago'
+      );
+
+      if (isPending) {
+        clearActiveStoredSession();
+      } else {
+        setCurrentUser(stored.user);
+        setUserProfile(stored.profile);
+        setOrganization(stored.organization);
+        setActiveOrganizationId(stored.organization.id);
+        setIsAuthChecking(false);
+      }
     }
 
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        setCurrentUser(user);
         try {
           let session = await fetchUserProfileAndOrg(user.uid);
           if (!session) {
             session = await createProfileForExistingUser(user);
           }
+
+          const isSuper = isSuperAdmin(user.email || session.profile?.email);
+          const isPending = !isSuper && (
+            session.organization?.status === 'pendiente_pago' ||
+            session.organization?.subscriptionStatus === 'pendiente_pago'
+          );
+
+          if (isPending) {
+            // Block access to dashboard: Pending payment must not log in!
+            clearActiveStoredSession();
+            try {
+              await authLogout();
+            } catch (e) {
+              console.warn('Logout on pending auth state:', e);
+            }
+            setCurrentUser(null);
+            setUserProfile(null);
+            setOrganization(null);
+            setActiveOrganizationId(null);
+            setIsAuthChecking(false);
+            return;
+          }
+
+          setCurrentUser(user);
           setUserProfile(session.profile);
           setOrganization(session.organization);
           setActiveOrganizationId(session.organization.id);

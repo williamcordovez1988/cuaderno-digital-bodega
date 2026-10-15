@@ -349,7 +349,21 @@ export async function registerBusiness({
   await syncOrganizationToMasterRegistry(organization);
 
   const session: AuthSession = { user, profile, organization };
-  saveActiveStoredSession(session);
+
+  if (isPaidPlan) {
+    // Mandate payment for Pro / Premium:
+    // 1. Clear any active session from localStorage
+    clearActiveStoredSession();
+    // 2. Sign out from Firebase Auth so onAuthStateChanged does not auto-login to the dashboard
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('SignOut error after paid registration:', e);
+    }
+  } else {
+    saveActiveStoredSession(session);
+  }
+
   return session;
 }
 
@@ -423,7 +437,22 @@ export async function loginWithEmail(email: string, password: string): Promise<A
       fullSession = { user, profile: session.profile, organization: session.organization };
     }
 
-    saveActiveStoredSession(fullSession);
+    const isSuperAdminUser = cleanEmail === DEFAULT_CREDENTIALS.email.toLowerCase();
+    const isPending = !isSuperAdminUser && (
+      fullSession.organization?.status === 'pendiente_pago' ||
+      fullSession.organization?.subscriptionStatus === 'pendiente_pago'
+    );
+
+    if (isPending) {
+      clearActiveStoredSession();
+      try {
+        await signOut(auth);
+      } catch (e) {
+        console.warn('SignOut error on pending login:', e);
+      }
+    } else {
+      saveActiveStoredSession(fullSession);
+    }
     return fullSession;
   } catch (error: any) {
     if (cleanEmail === DEFAULT_CREDENTIALS.email.toLowerCase() && password === DEFAULT_CREDENTIALS.password) {

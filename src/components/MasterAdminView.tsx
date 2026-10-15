@@ -100,10 +100,8 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
             };
           });
 
-        if (realtimeList.length > 0) {
-          setOrganizations(realtimeList);
-          setIsLoading(false);
-        }
+        setOrganizations(realtimeList);
+        setIsLoading(false);
       });
       return () => unsub();
     } catch (e) {
@@ -831,58 +829,81 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
                             
                             {/* 1-Click activation for pending payments */}
                             {isPendiente && (
-                              <button
-                                onClick={() => handleQuickChangePlan(org, isPremium ? 'premium' : 'pro', 30)}
-                                title="Confirmar Pago y Activar Suscripción por 30 días"
-                                className="w-full mb-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] shadow-xs flex items-center justify-center gap-1 transition-all cursor-pointer animate-pulse"
-                              >
-                                <span className="material-symbols-outlined text-[13px]">verified</span>
-                                ✅ Activar {isPremium ? 'Premium (30d)' : 'Pro (30d)'}
-                              </button>
+                              <div className="w-full mb-1.5 flex flex-col gap-1">
+                                <button
+                                  onClick={() => handleQuickChangePlan(org, isPremium ? 'premium' : 'pro', 30)}
+                                  title="Confirmar Pago y Activar Suscripción por 30 días"
+                                  className="w-full px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] shadow-xs flex items-center justify-center gap-1 transition-all cursor-pointer animate-pulse"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">verified</span>
+                                  ✅ Activar {isPremium ? 'Premium (30d)' : 'Pro (30d)'}
+                                </button>
+                                {isPremium ? (
+                                  <button
+                                    onClick={() => handleQuickChangePlan(org, 'pro', 30)}
+                                    title="Activar como Pro (30 días)"
+                                    className="w-full px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-600 text-amber-800 hover:text-white border border-amber-300 font-bold text-[10px] transition-all cursor-pointer"
+                                  >
+                                    Activar como Pro (30d)
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleQuickChangePlan(org, 'premium', 30)}
+                                    title="Activar como Premium (30 días)"
+                                    className="w-full px-2 py-0.5 rounded-lg bg-purple-50 hover:bg-purple-600 text-purple-800 hover:text-white border border-purple-300 font-bold text-[10px] transition-all cursor-pointer"
+                                  >
+                                    Activar como Premium (30d)
+                                  </button>
+                                )}
+                              </div>
                             )}
 
                             <div className="flex items-center justify-center gap-1 flex-wrap">
-                            {/* Cambiar a Pro (Mensual / Anual) */}
-                            {!isPro && (
-                              <div className="inline-flex rounded-lg shadow-2xs">
-                                <button
-                                  onClick={() => handleQuickChangePlan(org, 'pro', 30)}
-                                  title="Activar Plan Pro Mensual (+30 días)"
-                                  className="px-1.5 py-1 rounded-l-lg bg-amber-50 hover:bg-amber-500 text-amber-800 hover:text-white text-[10px] font-bold border border-amber-300 transition-all cursor-pointer active:scale-95 flex items-center gap-0.5"
-                                >
-                                  <span className="material-symbols-outlined text-[11px]">star</span>
-                                  Pro (30d)
-                                </button>
-                                <button
-                                  onClick={() => handleQuickChangePlan(org, 'pro', 365)}
-                                  title="Activar Plan Pro Anual (+365 días)"
-                                  className="px-1.5 py-1 rounded-r-lg bg-amber-100 hover:bg-amber-600 text-amber-900 hover:text-white text-[10px] font-black border-y border-r border-amber-300 transition-all cursor-pointer active:scale-95"
-                                >
-                                  1 Año
-                                </button>
-                              </div>
-                            )}
+                            {/* Activar / Renovar Plan Pro (Mensual / Anual) */}
+                            <div className="inline-flex rounded-lg shadow-2xs">
+                              <button
+                                onClick={() => handleQuickChangePlan(org, 'pro', 30)}
+                                title="Activar o renovar Plan Pro por 30 días"
+                                className={`px-1.5 py-1 rounded-l-lg text-[10px] font-bold border transition-all cursor-pointer active:scale-95 flex items-center gap-0.5 ${
+                                  isPro && isActive
+                                    ? 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600'
+                                    : 'bg-amber-50 hover:bg-amber-500 text-amber-800 hover:text-white border-amber-300'
+                                }`}
+                              >
+                                <span className="material-symbols-outlined text-[11px]">star</span>
+                                {isPro && isActive ? '+30d Pro' : 'Activar Pro (30d)'}
+                              </button>
+                              <button
+                                onClick={() => handleQuickChangePlan(org, 'pro', 365)}
+                                title="Activar Plan Pro Anual (+365 días)"
+                                className="px-1.5 py-1 rounded-r-lg bg-amber-100 hover:bg-amber-600 text-amber-900 hover:text-white text-[10px] font-black border-y border-r border-amber-300 transition-all cursor-pointer active:scale-95"
+                              >
+                                1 Año
+                              </button>
+                            </div>
 
-                            {/* Cambiar a Premium (Mensual / Anual) */}
-                            {!isPremium && (
-                              <div className="inline-flex rounded-lg shadow-2xs">
-                                <button
-                                  onClick={() => handleQuickChangePlan(org, 'premium', 30)}
-                                  title="Activar Plan Premium Mensual (+30 días)"
-                                  className="px-1.5 py-1 rounded-l-lg bg-purple-50 hover:bg-purple-600 text-purple-800 hover:text-white text-[10px] font-bold border border-purple-300 transition-all cursor-pointer active:scale-95 flex items-center gap-0.5"
-                                >
-                                  <span className="material-symbols-outlined text-[11px]">workspace_premium</span>
-                                  VIP (30d)
-                                </button>
-                                <button
-                                  onClick={() => handleQuickChangePlan(org, 'premium', 365)}
-                                  title="Activar Plan Premium Anual (+365 días)"
-                                  className="px-1.5 py-1 rounded-r-lg bg-purple-100 hover:bg-purple-700 text-purple-900 hover:text-white text-[10px] font-black border-y border-r border-purple-300 transition-all cursor-pointer active:scale-95"
-                                >
-                                  1 Año
-                                </button>
-                              </div>
-                            )}
+                            {/* Activar / Renovar Plan Premium (Mensual / Anual) */}
+                            <div className="inline-flex rounded-lg shadow-2xs">
+                              <button
+                                onClick={() => handleQuickChangePlan(org, 'premium', 30)}
+                                title="Activar o renovar Plan Premium por 30 días"
+                                className={`px-1.5 py-1 rounded-l-lg text-[10px] font-bold border transition-all cursor-pointer active:scale-95 flex items-center gap-0.5 ${
+                                  isPremium && isActive
+                                    ? 'bg-purple-600 text-white border-purple-700 hover:bg-purple-700'
+                                    : 'bg-purple-50 hover:bg-purple-600 text-purple-800 hover:text-white border-purple-300'
+                                }`}
+                              >
+                                <span className="material-symbols-outlined text-[11px]">workspace_premium</span>
+                                {isPremium && isActive ? '+30d VIP' : 'VIP (30d)'}
+                              </button>
+                              <button
+                                onClick={() => handleQuickChangePlan(org, 'premium', 365)}
+                                title="Activar Plan Premium Anual (+365 días)"
+                                className="px-1.5 py-1 rounded-r-lg bg-purple-100 hover:bg-purple-700 text-purple-900 hover:text-white text-[10px] font-black border-y border-r border-purple-300 transition-all cursor-pointer active:scale-95"
+                              >
+                                1 Año
+                              </button>
+                            </div>
 
                             {/* Bajar a Gratuito */}
                             {!isGratuito && (

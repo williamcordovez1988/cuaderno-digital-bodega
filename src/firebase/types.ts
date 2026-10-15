@@ -13,6 +13,7 @@ export interface Organization {
   ai_scans_used?: number;
   ownerEmail?: string;
   ownerName?: string;
+  ownerPhone?: string;
   ownerId?: string;
   subscriptionStatus?: 'active' | 'paused' | 'expired' | 'pendiente_pago';
   subscriptionExpiryDate?: string;

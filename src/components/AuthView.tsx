@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import {
   registerBusiness,
   loginWithEmail,
@@ -52,33 +54,78 @@ export const AuthView: React.FC<AuthViewProps> = ({
     plan: 'pro' | 'premium';
     orgId?: string;
     session?: AuthSession;
+    password?: string;
   } | null>(null);
 
   // Real-time listener: automatically unlock when Super Admin activates the plan
   useEffect(() => {
     if (!registeredPaidOrg?.orgId) return;
 
-    const unsub = subscribeToOrganization(registeredPaidOrg.orgId, (updatedOrg) => {
+    const orgId = registeredPaidOrg.orgId;
+    let isHandled = false;
+
+    const handleActivation = async (updatedOrg: any) => {
+      if (isHandled) return;
+      isHandled = true;
+
+      const activatedPlan = (updatedOrg.plan || updatedOrg.plan_suscripcion || registeredPaidOrg.plan).toUpperCase();
+      onShowToast(`🎉 ¡Plan ${activatedPlan} activado con éxito! Ingresando a tu negocio...`, 'celebration');
+      setIsDirectPaymentOpen(false);
+
+      if (registeredPaidOrg.password) {
+        try {
+          const freshSession = await loginWithEmail(registeredPaidOrg.email, registeredPaidOrg.password);
+          saveActiveStoredSession(freshSession);
+          setRegisteredPaidOrg(null);
+          onAuthSuccess(freshSession);
+          return;
+        } catch (e) {
+          console.warn('Auto-login with password failed, using base session:', e);
+        }
+      }
+
+      const baseSession = registeredPaidOrg.session;
+      if (baseSession) {
+        const updatedSession: AuthSession = {
+          ...baseSession,
+          organization: updatedOrg
+        };
+        saveActiveStoredSession(updatedSession);
+        setRegisteredPaidOrg(null);
+        onAuthSuccess(updatedSession);
+      }
+    };
+
+    // Periodic check in addition to onSnapshot
+    const checkStatus = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'organizations', orgId));
+        if (snap.exists()) {
+          const data = snap.data();
+          const isNowActive = (data.subscriptionStatus === 'active' || data.status === 'active');
+          if (isNowActive) {
+            await handleActivation(data);
+          }
+        }
+      } catch (e) {
+        // Ignore periodic check error
+      }
+    };
+
+    const interval = setInterval(checkStatus, 3500);
+
+    const unsub = subscribeToOrganization(orgId, (updatedOrg) => {
       const isNowActive = (updatedOrg.subscriptionStatus || updatedOrg.status) === 'active';
       if (isNowActive) {
-        const activatedPlan = (updatedOrg.plan || updatedOrg.plan_suscripcion || registeredPaidOrg.plan).toUpperCase();
-        onShowToast(`🎉 ¡Plan ${activatedPlan} activado con éxito! Ingresando a tu negocio...`, 'celebration');
-        setIsDirectPaymentOpen(false);
-        const baseSession = registeredPaidOrg.session;
-        if (baseSession) {
-          const updatedSession: AuthSession = {
-            ...baseSession,
-            organization: updatedOrg
-          };
-          saveActiveStoredSession(updatedSession);
-          setRegisteredPaidOrg(null);
-          onAuthSuccess(updatedSession);
-        }
+        handleActivation(updatedOrg);
       }
     });
 
-    return () => unsub();
-  }, [registeredPaidOrg?.orgId, registeredPaidOrg?.session, registeredPaidOrg?.plan, onAuthSuccess, onShowToast]);
+    return () => {
+      clearInterval(interval);
+      unsub();
+    };
+  }, [registeredPaidOrg?.orgId, registeredPaidOrg?.session, registeredPaidOrg?.plan, registeredPaidOrg?.password, registeredPaidOrg?.email, onAuthSuccess, onShowToast]);
 
   const switchMode = (newMode: 'login' | 'register') => {
     setErrorMessage(null);
@@ -179,7 +226,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
           email: session.organization.ownerEmail || email.trim(),
           plan: planSuscripcion,
           orgId: session.organization.id,
-          session
+          session,
+          password
         });
         setIsDirectPaymentOpen(true);
         onShowToast(`¡Bodega registrada! Por favor completa tu pago para activar tu cuenta.`, 'payments');
@@ -207,16 +255,24 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setLoading(true);
     try {
       const session = await loginWithEmail(email, password);
-      if (session.organization?.subscriptionStatus === 'pendiente_pago' || session.organization?.status === 'pendiente_pago') {
+      const isSuper = session.user?.email?.toLowerCase() === 'williamcordovezcn@gmail.com';
+      const isPending = !isSuper && (
+        session.organization?.subscriptionStatus === 'pendiente_pago' ||
+        session.organization?.status === 'pendiente_pago'
+      );
+
+      if (isPending) {
         // Enforce mandatory payment: block dashboard access and open payment modal
         setRegisteredPaidOrg({
           nombreNegocio: session.organization.nombre_negocio,
           email: session.organization.ownerEmail || email.trim(),
           plan: (session.organization.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro',
           orgId: session.organization.id,
-          session
+          session,
+          password
         });
         setIsDirectPaymentOpen(true);
+        setErrorMessage('⚠️ Tu cuenta está registrada con Plan ' + ((session.organization.plan_suscripcion as any) === 'premium' ? 'Premium' : 'Pro') + ' pero se encuentra Pendiente de Activación. Por favor completa tu pago o repórtalo por WhatsApp.');
         onShowToast('Tu cuenta aún está Pendiente de Activación por el Super Admin.', 'payments');
         return;
       }
