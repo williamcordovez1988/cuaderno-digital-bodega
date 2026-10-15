@@ -4,6 +4,7 @@ import {
   loginWithEmail,
   loginWithGoogleMultiTenant,
   saveActiveStoredSession,
+  resetPassword,
   AuthSession
 } from '../firebase/authService';
 import { subscribeToOrganization } from '../firebase/firestoreService';
@@ -27,6 +28,13 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Password Recovery State
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
+  const [resetErrorMessage, setResetErrorMessage] = useState<string | null>(null);
 
   // Form Fields - Initialized completely empty ("") for all users
   const [nombreNegocio, setNombreNegocio] = useState('');
@@ -82,14 +90,17 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const mapAuthError = (err: any): string => {
     const code = err?.code || '';
     if (code === 'auth/email-already-in-use') {
-      return 'Este correo electrónico ya está registrado. Por favor inicia sesión.';
+      return '⚠️ Este correo ya se encuentra registrado. Por favor inicia sesión o recupera tu contraseña.';
+    }
+    if (code === 'auth/operation-not-allowed') {
+      return '⚠️ El método de Correo/Contraseña no está habilitado en Firebase Authentication (auth/operation-not-allowed). Habilítalo en Firebase Console.';
     }
     if (
       code === 'auth/invalid-credential' ||
       code === 'auth/wrong-password' ||
       code === 'auth/user-not-found'
     ) {
-      return 'Correo o contraseña incorrectos. Verifica tus datos.';
+      return 'Correo o contraseña incorrectos. Verifica tus datos o recupera tu contraseña.';
     }
     if (code === 'auth/weak-password') {
       return 'La contraseña debe contener al menos 6 caracteres.';
@@ -101,6 +112,29 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return 'La ventana de Google fue cerrada antes de completar el acceso.';
     }
     return err?.message || 'Ocurrió un error al procesar la solicitud.';
+  };
+
+  const handleSendPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetErrorMessage(null);
+    setResetSuccessMessage(null);
+
+    const clean = resetEmail.trim().toLowerCase();
+    if (!clean) {
+      setResetErrorMessage('Por favor ingresa tu correo electrónico.');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await resetPassword(clean);
+      setResetSuccessMessage('📩 Te hemos enviado un enlace a tu correo para restablecer tu contraseña.');
+      onShowToast('📩 Te hemos enviado un enlace a tu correo para restablecer tu contraseña.', 'mark_email_read');
+    } catch (err: any) {
+      setResetErrorMessage(err?.message || 'No se pudo enviar el enlace de recuperación.');
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -549,9 +583,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#111c2d] mb-1">
-                    Contraseña
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-[#111c2d]">
+                      Contraseña
+                    </label>
+                  </div>
                   <div className="relative">
                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#554336]">
                       <span className="material-symbols-outlined text-[18px]">lock</span>
@@ -565,6 +601,20 @@ export const AuthView: React.FC<AuthViewProps> = ({
                       autoComplete="current-password"
                       className="w-full pl-9 pr-3 py-2.5 bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl text-xs font-semibold text-[#111c2d] placeholder-[#8d7c71] focus:outline-none focus:border-[#8d4b00] focus:bg-white transition-colors"
                     />
+                  </div>
+                  <div className="mt-1.5 text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetEmail(email.trim());
+                        setResetSuccessMessage(null);
+                        setResetErrorMessage(null);
+                        setIsResetPasswordOpen(true);
+                      }}
+                      className="text-[11px] font-bold text-[#8d4b00] hover:text-[#b15f00] hover:underline cursor-pointer transition-colors"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </button>
                   </div>
                 </div>
 
@@ -684,6 +734,126 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Modal: Recuperación de Contraseña */}
+      {isResetPasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs animate-in fade-in duration-200">
+          <div
+            className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-[#E8E2D8] flex flex-col animate-in zoom-in-95 duration-200"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-[#ffdcc3] via-[#fff1e5] to-white p-5 border-b border-[#E8E2D8] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#8d4b00] text-white flex items-center justify-center shadow-md shrink-0">
+                  <span className="material-symbols-outlined text-[22px]">lock_reset</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-black font-heading text-[#111c2d]">
+                    Recuperar Contraseña
+                  </h3>
+                  <p className="text-[11px] text-[#554336]">
+                    Restablece el acceso a tu cuenta fácilmente
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsResetPasswordOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#554336] hover:text-[#111c2d] flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
+                title="Cerrar ventana"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 space-y-4">
+              {resetSuccessMessage ? (
+                <div className="space-y-4 text-center py-2">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto shadow-sm">
+                    <span className="material-symbols-outlined text-[28px]">mark_email_read</span>
+                  </div>
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-medium">
+                    {resetSuccessMessage}
+                  </div>
+                  <p className="text-[11px] text-[#554336]">
+                    Revisa tu bandeja de entrada o la carpeta de spam para seguir las instrucciones del enlace.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsResetPasswordOpen(false)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  >
+                    Entendido, volver al inicio de sesión
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSendPasswordReset} className="space-y-4">
+                  <p className="text-xs text-[#554336] leading-relaxed">
+                    Ingresa el correo electrónico asociado a tu cuenta. Te enviaremos un enlace oficial de Firebase para restablecer tu contraseña.
+                  </p>
+
+                  {resetErrorMessage && (
+                    <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-medium flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-red-600 shrink-0">error</span>
+                      <span>{resetErrorMessage}</span>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#111c2d] mb-1">
+                      Correo Electrónico
+                    </label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#554336]">
+                        <span className="material-symbols-outlined text-[18px]">mail</span>
+                      </span>
+                      <input
+                        type="email"
+                        required
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        placeholder="tucorreo@ejemplo.com"
+                        autoComplete="email"
+                        className="w-full pl-9 pr-3 py-2.5 bg-[#FAF8F5] border border-[#E8E2D8] rounded-xl text-xs font-semibold text-[#111c2d] placeholder-[#8d7c71] focus:outline-none focus:border-[#8d4b00] focus:bg-white transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsResetPasswordOpen(false)}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetLoading}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {resetLoading ? (
+                        <>
+                          <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-[16px]">send</span>
+                          Enviar enlace de recuperación
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Direct Payment Modal */}
       <DirectPaymentModal
