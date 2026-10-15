@@ -825,8 +825,8 @@ export default function App() {
       )}
 
       {/* Main Content View Container */}
-      <main className="w-full pt-28 sm:pt-32 pb-28 sm:pb-20 flex-1">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <main className="w-full pt-20 sm:pt-24 pb-28 sm:pb-20 flex-1">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6">
           {currentTab === 'registro' && (
             <RegistroDiario
               products={products}
@@ -834,6 +834,8 @@ export default function App() {
               recentSales={sales}
               exchangeRate={settings.bcvExchangeRate}
               onUpdateExchangeRate={handleUpdateExchangeRate}
+              onFetchExchangeRateNow={handleFetchRateNow}
+              isFetchingRate={isFetchingRate}
               onCompleteSale={handleCompleteSale}
               onShowToast={showToast}
               onOpenCashChangeModal={handleOpenCashChangeModal}

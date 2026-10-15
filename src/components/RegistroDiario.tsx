@@ -25,6 +25,8 @@ interface RegistroDiarioProps {
   onShowToast: (msg: string, icon?: string) => void;
   onOpenCashChangeModal?: (totalUSD: number, totalBs: number) => void;
   isEmployee?: boolean;
+  onFetchExchangeRateNow?: () => Promise<void>;
+  isFetchingRate?: boolean;
 }
 
 export const RegistroDiario: React.FC<RegistroDiarioProps> = ({
@@ -36,7 +38,9 @@ export const RegistroDiario: React.FC<RegistroDiarioProps> = ({
   onCompleteSale,
   onShowToast,
   onOpenCashChangeModal,
-  isEmployee = false
+  isEmployee = false,
+  onFetchExchangeRateNow,
+  isFetchingRate = false
 }) => {
   // Input note state
   const [noteText, setNoteText] = useState(
@@ -453,19 +457,26 @@ export const RegistroDiario: React.FC<RegistroDiarioProps> = ({
         </div>
 
         {/* Tasa del Día Widget */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-[#f0f3ff] px-4 py-2 rounded-xl border border-[#dbc2b0]/30 w-full lg:w-auto">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 bg-[#f0f3ff] px-3.5 py-2.5 rounded-2xl border border-[#dbc2b0]/40 w-full lg:w-auto shadow-2xs">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#8d4b00] text-[20px]">currency_exchange</span>
-            <span className="text-xs font-bold text-[#111c2d]">Tasa Oficial:</span>
-          </div>
-          {isEmployee ? (
-            <div className="flex items-center gap-1.5 bg-white px-3 py-1 rounded-lg border border-[#dbc2b0]/40 font-numeric-tally font-extrabold text-xs text-[#111c2d]">
-              <span>{exchangeRate.toFixed(2)} Bs/$</span>
-              <span className="text-[10px] text-[#00714e] font-bold bg-[#82f5c1]/30 px-1.5 py-0.2 rounded">BCV Fijada</span>
+            <span className="w-8 h-8 rounded-xl bg-white text-[#8d4b00] flex items-center justify-center shadow-2xs shrink-0">
+              <span className="material-symbols-outlined text-[19px]">currency_exchange</span>
+            </span>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-[#554336] uppercase tracking-wider">Tasa BCV del Día</span>
+              <span className="text-xs font-extrabold text-[#111c2d] font-numeric-tally">
+                {exchangeRate.toFixed(2)} <span className="text-[10px] font-semibold text-[#554336]">Bs/USD</span>
+              </span>
             </div>
+          </div>
+
+          {isEmployee ? (
+            <span className="text-[10px] text-[#00714e] font-bold bg-[#82f5c1]/30 px-2 py-0.5 rounded-lg border border-[#82f5c1]/50 ml-auto sm:ml-2">
+              BCV Fijada
+            </span>
           ) : (
-            <>
-              <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-[#dbc2b0]/40">
+            <div className="flex items-center gap-1.5 ml-auto sm:ml-2">
+              <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-xl border border-[#dbc2b0]/40 shadow-2xs">
                 <span className="text-xs font-bold text-[#554336]">Bs</span>
                 <input
                   type="number"
@@ -474,7 +485,7 @@ export const RegistroDiario: React.FC<RegistroDiarioProps> = ({
                   onChange={(e) => setTasaInput(e.target.value)}
                   className="w-16 text-xs font-extrabold text-[#111c2d] bg-transparent focus:outline-none text-right font-numeric-tally"
                 />
-                <span className="text-[11px] text-[#554336]">/$</span>
+                <span className="text-[10px] text-[#554336]">/$</span>
               </div>
               <button
                 onClick={() => {
@@ -485,12 +496,28 @@ export const RegistroDiario: React.FC<RegistroDiarioProps> = ({
                   }
                 }}
                 type="button"
-                className="px-3 py-1 rounded-lg bg-[#8d4b00] hover:bg-[#b15f00] text-white text-xs font-bold shadow-sm transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white text-xs font-bold shadow-xs transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
+                title="Actualizar tasa manualmente"
               >
-                <span className="material-symbols-outlined text-[15px]">check</span>
-                Actualizar
+                <span className="material-symbols-outlined text-[14px]">check</span>
+                <span>Guardar</span>
               </button>
-            </>
+              {onFetchExchangeRateNow && (
+                <button
+                  type="button"
+                  onClick={onFetchExchangeRateNow}
+                  disabled={isFetchingRate}
+                  className={`p-1.5 rounded-xl bg-white hover:bg-[#ffdcc3]/50 text-[#8d4b00] border border-[#dbc2b0]/40 shadow-2xs transition-all cursor-pointer active:scale-95 ${
+                    isFetchingRate ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
+                  title="🔄 Consultar Tasa Oficial BCV en Vivo"
+                >
+                  <span className={`material-symbols-outlined text-[17px] ${isFetchingRate ? 'animate-spin' : ''}`}>
+                    sync
+                  </span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       </section>
