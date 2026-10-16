@@ -5,8 +5,10 @@ import {
   signOut,
   updateProfile,
   sendPasswordResetEmail,
+  getAuth,
   User
 } from 'firebase/auth';
+import { initializeApp, deleteApp } from 'firebase/app';
 import {
   collection,
   doc,
@@ -15,10 +17,12 @@ import {
   setDoc,
   query,
   where,
-  limit
+  limit,
+  getFirestore
 } from 'firebase/firestore';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { auth, db, googleProvider } from './config';
-import { Organization, UserProfile, BodegaSettings } from './types';
+import { Organization, UserProfile, BodegaSettings, OrganizationAdminRecord } from './types';
 import { syncOrganizationToMasterRegistry } from './firestoreService';
 
 export interface AuthSession {
@@ -637,3 +641,222 @@ export async function logout(): Promise<void> {
     console.warn('Error during signOut:', e);
   }
 }
+
+export interface CreateClientManualParams {
+  nombreNegocio: string;
+  nombrePropietario: string;
+  email: string;
+  temporaryPassword: string;
+  telefono?: string;
+  plan: 'gratuito' | 'pro' | 'premium';
+  subscriptionDays: number;
+}
+
+export interface CreateClientManualResult {
+  userId: string;
+  orgId: string;
+  nombreNegocio: string;
+  nombrePropietario: string;
+  email: string;
+  temporaryPassword: string;
+  telefono: string;
+  plan: 'gratuito' | 'pro' | 'premium';
+  planLabel: string;
+  subscriptionDays: number;
+  expiryDateStr: string;
+}
+
+/**
+ * Manually register a new client from /master-admin by the Super Admin.
+ * Executes user creation in Firebase Auth without signing out the currently logged-in Super Admin,
+ * and synchronously saves the documents in Firestore (organizations/{orgId}, users/{userId}, profiles/{userId}, settings/{orgId})
+ * with status: 'active'.
+ */
+export async function createClientManuallyByAdmin(
+  params: CreateClientManualParams
+): Promise<CreateClientManualResult> {
+  const cleanEmail = params.email.trim().toLowerCase();
+  const password = params.temporaryPassword.trim();
+
+  if (!cleanEmail) {
+    throw new Error('El correo electrónico es obligatorio.');
+  }
+  if (!password || password.length < 6) {
+    throw new Error('La contraseña temporal debe tener al menos 6 caracteres.');
+  }
+  if (!params.nombreNegocio.trim()) {
+    throw new Error('El nombre del negocio o bodega es obligatorio.');
+  }
+
+  // 1. Create the user in Firebase Auth using an isolated secondary Firebase app
+  // This guarantees the currently active Super Admin session is NEVER disturbed or signed out.
+  const secondaryAppName = `AdminClientCreation-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+  const secondaryAuth = getAuth(secondaryApp);
+  const secondaryDb = getFirestore(secondaryApp, (firebaseConfig as any).firestoreDatabaseId);
+
+  let newUserId = '';
+  try {
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, password);
+    newUserId = cred.user.uid;
+
+    if (params.nombrePropietario.trim()) {
+      try {
+        await updateProfile(cred.user, { displayName: params.nombrePropietario.trim() });
+      } catch (e) {
+        console.warn('Could not update secondary user displayName:', e);
+      }
+    }
+
+    const orgId = `org-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const nowIso = new Date().toISOString();
+    const days = params.subscriptionDays > 0 ? Number(params.subscriptionDays) : 30;
+    const expiryIso = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    const expiryDateStr = expiryIso.split('T')[0];
+    const planNorm = params.plan;
+    const planCap = planNorm === 'premium' ? 'Premium' : planNorm === 'pro' ? 'Pro' : 'Gratis';
+    const cleanPhone = params.telefono?.trim() || '';
+
+    // 2. Prepare documents for Firestore
+    const organizationDoc: Organization = {
+      id: orgId,
+      nombre_negocio: params.nombreNegocio.trim(),
+      plan_suscripcion: planNorm,
+      plan: planCap,
+      status: 'active',
+      subscriptionStatus: 'active',
+      fecha_registro: nowIso,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      ownerEmail: cleanEmail,
+      ownerName: params.nombrePropietario.trim(),
+      ownerId: newUserId,
+      ownerPhone: cleanPhone,
+      telefono: cleanPhone,
+      planExpiresAt: expiryIso,
+      subscriptionExpiryDate: expiryDateStr,
+      paymentNotes: `Cliente creado e insertado manualmente por Master Admin (${planCap} - ${days} días)`,
+      ai_scans_used: 0,
+      productsCount: 0
+    };
+
+    const userDocData = {
+      uid: newUserId,
+      id: newUserId,
+      email: cleanEmail,
+      displayName: params.nombrePropietario.trim(),
+      nombre: params.nombrePropietario.trim(),
+      organization_id: orgId,
+      organizationId: orgId,
+      rol: 'dueno',
+      role: 'dueno',
+      plan: planCap,
+      plan_suscripcion: planNorm,
+      status: 'active',
+      subscriptionStatus: 'active',
+      planExpiresAt: expiryIso,
+      subscriptionExpiryDate: expiryDateStr,
+      phone: cleanPhone,
+      telefono: cleanPhone,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    };
+
+    const profileDoc: UserProfile = {
+      id: newUserId,
+      user_id: newUserId,
+      organization_id: orgId,
+      rol: 'dueno',
+      nombre: params.nombrePropietario.trim(),
+      email: cleanEmail,
+      telefono: cleanPhone,
+      fecha_creacion: nowIso
+    };
+
+    const initialSettings: BodegaSettings = {
+      organization_id: orgId,
+      bcvExchangeRate: 877.90,
+      bodegaName: params.nombreNegocio.trim(),
+      cashierName: params.nombrePropietario.trim() || 'Caja Principal',
+      lastUpdated: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      lastExchangeRateUpdate: 'Inicial (877.90 Bs/USD)',
+      pagoMovilPhone: cleanPhone,
+      pagoMovilBank: '',
+      pagoMovilCI: '',
+      ownerPhone: cleanPhone
+    };
+
+    // 3. Synchronously write documents to Firestore using secondaryDb (signed in as the client)
+    // and primary db (signed in as Super Admin) for resilient persistence across permission models
+    await Promise.all([
+      setDoc(doc(secondaryDb, 'organizations', orgId), organizationDoc, { merge: true }),
+      setDoc(doc(secondaryDb, 'users', newUserId), userDocData, { merge: true }),
+      setDoc(doc(secondaryDb, 'profiles', newUserId), profileDoc, { merge: true }),
+      setDoc(doc(secondaryDb, 'settings', orgId), initialSettings, { merge: true }),
+      setDoc(doc(db, 'organizations', orgId), organizationDoc, { merge: true }).catch(() => {}),
+      setDoc(doc(db, 'users', newUserId), userDocData, { merge: true }).catch(() => {}),
+      setDoc(doc(db, 'profiles', newUserId), profileDoc, { merge: true }).catch(() => {}),
+      setDoc(doc(db, 'settings', orgId), initialSettings, { merge: true }).catch(() => {})
+    ]);
+
+    // 4. Synchronize to Master Registry for immediate real-time display
+    try {
+      const adminRecord: OrganizationAdminRecord = {
+        id: orgId,
+        nombre_negocio: params.nombreNegocio.trim(),
+        ownerName: params.nombrePropietario.trim(),
+        ownerEmail: cleanEmail,
+        ownerPhone: cleanPhone,
+        plan_suscripcion: planNorm,
+        plan: planCap,
+        status: 'active',
+        subscriptionStatus: 'active',
+        subscriptionExpiryDate: expiryDateStr,
+        planExpiresAt: expiryIso,
+        fecha_registro: nowIso,
+        createdAt: nowIso,
+        productsCount: 0,
+        ai_scans_used: 0,
+        paymentNotes: `Cliente creado e insertado manualmente por Master Admin (${planCap} - ${days} días)`
+      };
+      await syncOrganizationToMasterRegistry(adminRecord);
+    } catch (e) {
+      console.warn('Sync to master registry notice:', e);
+    }
+
+    // 5. Sign out secondary auth
+    await signOut(secondaryAuth);
+
+    return {
+      userId: newUserId,
+      orgId,
+      nombreNegocio: params.nombreNegocio.trim(),
+      nombrePropietario: params.nombrePropietario.trim(),
+      email: cleanEmail,
+      temporaryPassword: password,
+      telefono: cleanPhone,
+      plan: planNorm,
+      planLabel: planCap,
+      subscriptionDays: days,
+      expiryDateStr
+    };
+  } catch (err: any) {
+    if (err?.code === 'auth/email-already-in-use') {
+      throw new Error('⚠️ Este correo electrónico ya está registrado en Firebase Authentication.');
+    }
+    if (err?.code === 'auth/weak-password') {
+      throw new Error('⚠️ La contraseña temporal debe tener al menos 6 caracteres.');
+    }
+    if (err?.code === 'auth/invalid-email') {
+      throw new Error('⚠️ El formato del correo electrónico ingresado no es válido.');
+    }
+    throw err;
+  } finally {
+    try {
+      await deleteApp(secondaryApp);
+    } catch (e) {
+      // Secondary app cleanup
+    }
+  }
+}
+

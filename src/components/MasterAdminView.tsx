@@ -5,9 +5,12 @@ import { OrganizationAdminRecord, PLAN_PRICING, LEGACY_DUMMY_IDS } from '../fire
 import {
   getAllOrganizationsForAdmin,
   updateOrganizationPlanAndStatus,
-  createManualOrganization,
   deleteOrganizationCompletely
 } from '../firebase/firestoreService';
+import {
+  createClientManuallyByAdmin,
+  CreateClientManualResult
+} from '../firebase/authService';
 
 interface MasterAdminViewProps {
   bcvRate: number;
@@ -37,13 +40,18 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
   const [deletingOrg, setDeletingOrg] = useState<OrganizationAdminRecord | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
 
+  // Manual Client Registration State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [newBizName, setNewBizName] = useState<string>('');
   const [newOwnerName, setNewOwnerName] = useState<string>('');
   const [newOwnerEmail, setNewOwnerEmail] = useState<string>('');
+  const [newTempPassword, setNewTempPassword] = useState<string>('');
   const [newOwnerPhone, setNewOwnerPhone] = useState<string>('');
   const [newPlan, setNewPlan] = useState<'gratuito' | 'pro' | 'premium'>('pro');
-  const [newNotes, setNewNotes] = useState<string>('');
+  const [newSubscriptionDays, setNewSubscriptionDays] = useState<number>(30);
+  const [createErrorMessage, setCreateErrorMessage] = useState<string | null>(null);
+  const [createdClientResult, setCreatedClientResult] = useState<CreateClientManualResult | null>(null);
+  const [isCopiedCredentials, setIsCopiedCredentials] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Load organizations on mount and listen to Firestore updates
@@ -240,37 +248,104 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
     }
   };
 
-  // Manual Creation of Business
-  const handleCreateManual = async (e: React.FormEvent) => {
+  // Open Manual Client Creation Modal with fresh defaults
+  const handleOpenCreateModal = () => {
+    setNewBizName('');
+    setNewOwnerName('');
+    setNewOwnerEmail('');
+    setNewTempPassword('');
+    setNewOwnerPhone('');
+    setNewPlan('pro');
+    setNewSubscriptionDays(30);
+    setCreateErrorMessage(null);
+    setCreatedClientResult(null);
+    setIsCopiedCredentials(false);
+    setIsCreateModalOpen(true);
+  };
+
+  // Helper to generate a friendly 8-character temporary password
+  const handleGeneratePassword = () => {
+    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$';
+    let pwd = '';
+    for (let i = 0; i < 8; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setNewTempPassword(pwd);
+  };
+
+  // Manual Client Creation Handler
+  const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBizName.trim() || !newOwnerEmail.trim()) {
-      onShowToast('Ingresa el nombre del negocio y correo del dueño', 'warning');
+    setCreateErrorMessage(null);
+
+    const cleanBiz = newBizName.trim();
+    const cleanOwner = newOwnerName.trim();
+    const cleanEmail = newOwnerEmail.trim().toLowerCase();
+    const cleanPwd = newTempPassword.trim();
+    const cleanPhone = newOwnerPhone.trim();
+    const days = Number(newSubscriptionDays) || 30;
+
+    if (!cleanBiz) {
+      setCreateErrorMessage('Por favor ingresa el Nombre del Negocio.');
       return;
     }
+    if (!cleanOwner) {
+      setCreateErrorMessage('Por favor ingresa el Nombre del Propietario.');
+      return;
+    }
+    if (!cleanEmail) {
+      setCreateErrorMessage('Por favor ingresa el Correo Electrónico.');
+      return;
+    }
+    if (!cleanPwd || cleanPwd.length < 6) {
+      setCreateErrorMessage('La Contraseña Temporal debe tener al menos 6 caracteres.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const newOrg = await createManualOrganization({
-        nombre_negocio: newBizName,
-        ownerName: newOwnerName || 'Propietario',
-        ownerEmail: newOwnerEmail,
-        ownerPhone: newOwnerPhone,
-        plan_suscripcion: newPlan,
-        paymentNotes: newNotes
+      const result = await createClientManuallyByAdmin({
+        nombreNegocio: cleanBiz,
+        nombrePropietario: cleanOwner,
+        email: cleanEmail,
+        temporaryPassword: cleanPwd,
+        telefono: cleanPhone,
+        plan: newPlan,
+        subscriptionDays: days
       });
-      setOrganizations((prev) => [newOrg, ...prev]);
-      setIsCreateModalOpen(false);
-      setNewBizName('');
-      setNewOwnerName('');
-      setNewOwnerEmail('');
-      setNewOwnerPhone('');
-      setNewNotes('');
-      onShowToast(`¡Negocio "${newOrg.nombre_negocio}" registrado exitosamente!`, 'add_business');
-    } catch (err) {
+
+      setCreatedClientResult(result);
+      onShowToast(`¡Cliente "${result.nombreNegocio}" creado y activado con éxito!`, 'verified');
+    } catch (err: any) {
       console.error(err);
-      onShowToast('Error al registrar nuevo negocio', 'error');
+      setCreateErrorMessage(err?.message || 'Error al crear la cuenta del cliente.');
+      onShowToast(err?.message || 'Error al crear cliente', 'error');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Credentials formatted for easy 1-click sharing via WhatsApp
+  const getWhatsAppCredentialsText = (client: CreateClientManualResult) => {
+    const loginUrl = `${window.location.origin}/login`;
+    return `¡Tu cuenta de Bodega ha sido activada! Accede en: ${loginUrl} | Correo: ${client.email} | Clave: ${client.temporaryPassword} | Negocio: ${client.nombreNegocio} | Plan: ${client.planLabel} (${client.subscriptionDays} días de suscripción)`;
+  };
+
+  const handleCopyCredentials = (client: CreateClientManualResult) => {
+    const text = getWhatsAppCredentialsText(client);
+    navigator.clipboard.writeText(text);
+    setIsCopiedCredentials(true);
+    onShowToast('📋 ¡Credenciales copiadas al portapapeles para WhatsApp!', 'content_copy');
+    setTimeout(() => setIsCopiedCredentials(false), 3000);
+  };
+
+  const handleSendWhatsAppToClient = (client: CreateClientManualResult) => {
+    const cleanPhone = client.telefono.replace(/[^0-9]/g, '');
+    const text = getWhatsAppCredentialsText(client);
+    const url = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
   };
 
   // KPI Calculations
@@ -386,11 +461,11 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
 
             {/* New Bodega Button */}
             <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              onClick={handleOpenCreateModal}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
             >
-              <span className="material-symbols-outlined text-[17px]">add_business</span>
-              <span>Registrar Bodega</span>
+              <span className="material-symbols-outlined text-[18px]">add_business</span>
+              <span>➕ Registrar Nueva Bodega</span>
             </button>
 
             {/* Back to Regular Bodega */}
@@ -1114,133 +1189,300 @@ export const MasterAdminView: React.FC<MasterAdminViewProps> = ({
           MODAL: REGISTRO MANUAL DE CLIENTE / BODEGA
           ========================================================================= */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#E8E2D8] relative">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-[#E8E2D8] relative my-8">
             <button
               onClick={() => setIsCreateModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-lg cursor-pointer"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-lg cursor-pointer w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors"
+              aria-label="Cerrar modal"
             >
               ✕
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
-                <span className="material-symbols-outlined text-[24px]">add_business</span>
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-[#111c2d]">
-                  Registrar Bodega Manualmente
-                </h3>
-                <p className="text-xs text-[#554336]">
-                  Da de alta a un comercio tras confirmar su pago directo
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleCreateManual} className="space-y-3.5 text-xs">
-              
-              <div>
-                <label className="block font-bold text-[#111c2d] mb-1">Nombre del Negocio / Bodega *</label>
-                <input
-                  type="text"
-                  required
-                  value={newBizName}
-                  onChange={(e) => setNewBizName(e.target.value)}
-                  placeholder="Ej: Inversiones Los Andes C.A."
-                  className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs font-bold text-[#111c2d] focus:bg-white focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-[#111c2d] mb-1">Nombre del Dueño</label>
-                  <input
-                    type="text"
-                    value={newOwnerName}
-                    onChange={(e) => setNewOwnerName(e.target.value)}
-                    placeholder="Ej: Manuel Castillo"
-                    className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs text-[#111c2d] focus:bg-white focus:outline-none"
-                  />
+            {createdClientResult ? (
+              /* Success view with credentials ready to copy */
+              <div className="space-y-5 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-xs shrink-0">
+                    <span className="material-symbols-outlined text-[28px]">check_circle</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-[#111c2d]">
+                      ¡Bodega Creada y Activada!
+                    </h3>
+                    <p className="text-xs text-[#554336]">
+                      Usuario creado en Firebase Auth y Firestore con <span className="font-bold text-emerald-700">status: 'active'</span>
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block font-bold text-[#111c2d] mb-1">Teléfono / WhatsApp</label>
-                  <input
-                    type="text"
-                    value={newOwnerPhone}
-                    onChange={(e) => setNewOwnerPhone(e.target.value)}
-                    placeholder="Ej: +58 424 1234567"
-                    className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs text-[#111c2d] focus:bg-white focus:outline-none"
-                  />
+
+                {/* Credentials Card */}
+                <div className="p-4 bg-[#FAF8F5] border border-[#dbc2b0]/50 rounded-2xl space-y-2.5 text-xs text-[#111c2d]">
+                  <div className="flex justify-between items-center py-1 border-b border-[#E8E2D8]">
+                    <span className="text-[#554336] font-medium">🏢 Negocio:</span>
+                    <span className="font-extrabold">{createdClientResult.nombreNegocio}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-[#E8E2D8]">
+                    <span className="text-[#554336] font-medium">👤 Propietario:</span>
+                    <span className="font-bold">{createdClientResult.nombrePropietario}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-[#E8E2D8]">
+                    <span className="text-[#554336] font-medium">📧 Correo:</span>
+                    <span className="font-bold font-mono text-[#8d4b00]">{createdClientResult.email}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-[#E8E2D8]">
+                    <span className="text-[#554336] font-medium">🔑 Clave Temporal:</span>
+                    <span className="font-black font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      {createdClientResult.temporaryPassword}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-[#E8E2D8]">
+                    <span className="text-[#554336] font-medium">⭐ Plan Asignado:</span>
+                    <span className="font-black text-[#8d4b00]">{createdClientResult.planLabel} ({createdClientResult.subscriptionDays} días de suscripción)</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-[#554336] font-medium">📅 Vence el:</span>
+                    <span className="font-bold">{createdClientResult.expiryDateStr}</span>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block font-bold text-[#111c2d] mb-1">Correo Electrónico del Dueño *</label>
-                <input
-                  type="email"
-                  required
-                  value={newOwnerEmail}
-                  onChange={(e) => setNewOwnerEmail(e.target.value)}
-                  placeholder="ejemplo@bodega.com"
-                  className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs text-[#111c2d] focus:bg-white focus:outline-none"
-                />
-              </div>
+                {/* Primary CTA: Copiar Credenciales para WhatsApp */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCredentials(createdClientResult)}
+                    className="w-full py-3.5 px-4 rounded-xl bg-[#006c4a] hover:bg-[#005238] text-white text-xs sm:text-sm font-black shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">
+                      {isCopiedCredentials ? 'done_all' : 'content_copy'}
+                    </span>
+                    <span>
+                      {isCopiedCredentials ? '✓ ¡Credenciales Copiadas!' : '📋 Copiar Credenciales para WhatsApp'}
+                    </span>
+                  </button>
 
-              <div>
-                <label className="block font-bold text-[#111c2d] mb-1">Plan a Asignar:</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['gratuito', 'pro', 'premium'] as const).map((p) => (
+                  {createdClientResult.telefono && (
                     <button
-                      key={p}
                       type="button"
-                      onClick={() => setNewPlan(p)}
-                      className={`py-2 rounded-xl font-bold capitalize transition-all cursor-pointer border ${
-                        newPlan === p
-                          ? 'bg-[#111c2d] text-white border-[#111c2d]'
-                          : 'bg-[#FAF8F5] text-[#554336] border-[#dbc2b0]/50'
-                      }`}
+                      onClick={() => handleSendWhatsAppToClient(createdClientResult)}
+                      className="w-full py-3 px-4 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      {p === 'gratuito' ? 'Gratis ($0)' : p === 'pro' ? 'Pro ($9.99)' : 'Premium ($19.99)'}
+                      <span className="material-symbols-outlined text-[18px]">chat</span>
+                      <span>📲 Abrir WhatsApp directo al Cliente ({createdClientResult.telefono})</span>
                     </button>
-                  ))}
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-[#f0ebe3]">
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateModal}
+                    className="px-4 py-2 rounded-xl bg-[#FAF8F5] hover:bg-[#f0ece5] text-xs font-bold text-[#111c2d] border border-[#dbc2b0]/50 transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add</span>
+                    Registrar Otra Bodega
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateModalOpen(false)}
+                    className="px-5 py-2 rounded-xl bg-[#111c2d] hover:bg-[#203350] text-white text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Listo / Cerrar
+                  </button>
                 </div>
               </div>
+            ) : (
+              /* Form view */
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[24px]">add_business</span>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-[#111c2d]">
+                      ➕ Registrar Nueva Bodega
+                    </h3>
+                    <p className="text-xs text-[#554336]">
+                      Inserción manual de cliente con credenciales de acceso directo
+                    </p>
+                  </div>
+                </div>
 
-              <div>
-                <label className="block font-bold text-[#111c2d] mb-1">Notas de Pago / Comprobante:</label>
-                <input
-                  type="text"
-                  value={newNotes}
-                  onChange={(e) => setNewNotes(e.target.value)}
-                  placeholder="Ej: Pago verificado por Pago Móvil Mercantil #998811"
-                  className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs text-[#111c2d] focus:bg-white focus:outline-none"
-                />
-              </div>
+                {createErrorMessage && (
+                  <div className="mb-4 p-3 rounded-xl bg-[#ffdad6] border border-[#ba1a1a]/30 text-[#ba1a1a] text-xs font-semibold flex items-start gap-2 animate-in fade-in">
+                    <span className="material-symbols-outlined text-[17px] shrink-0">error</span>
+                    <span>{createErrorMessage}</span>
+                  </div>
+                )}
 
-              <div className="flex items-center justify-end gap-2.5 mt-6 pt-4 border-t border-[#f0ebe3]">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-[#554336] hover:bg-[#FAF8F5] transition-colors cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-[#006c4a] hover:bg-[#005238] text-white text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  {isSubmitting ? (
-                    <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>
-                  ) : (
-                    <span className="material-symbols-outlined text-[16px]">add_task</span>
-                  )}
-                  <span>Crear y Activar Bodega</span>
-                </button>
-              </div>
+                <form onSubmit={handleCreateClient} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block font-bold text-[#111c2d] mb-1">
+                      Nombre del Negocio <span className="text-rose-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newBizName}
+                      onChange={(e) => setNewBizName(e.target.value)}
+                      placeholder="Ej: Inversiones Los Andes C.A."
+                      className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs font-bold text-[#111c2d] focus:bg-white focus:outline-none"
+                    />
+                  </div>
 
-            </form>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-[#111c2d] mb-1">
+                        Nombre del Propietario <span className="text-rose-600">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newOwnerName}
+                        onChange={(e) => setNewOwnerName(e.target.value)}
+                        placeholder="Ej: Manuel Castillo"
+                        className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs text-[#111c2d] focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-[#111c2d] mb-1">
+                        Teléfono
+                      </label>
+                      <input
+                        type="text"
+                        value={newOwnerPhone}
+                        onChange={(e) => setNewOwnerPhone(e.target.value)}
+                        placeholder="Ej: +58 424 1234567"
+                        className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs text-[#111c2d] focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-[#111c2d] mb-1">
+                        Correo Electrónico <span className="text-rose-600">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={newOwnerEmail}
+                        onChange={(e) => setNewOwnerEmail(e.target.value)}
+                        placeholder="cliente@bodega.com"
+                        className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs text-[#111c2d] focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-[#111c2d]">
+                          Contraseña Temporal <span className="text-rose-600">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleGeneratePassword}
+                          className="text-[10px] font-bold text-[#8d4b00] hover:underline cursor-pointer"
+                        >
+                          🎲 Generar
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={newTempPassword}
+                        onChange={(e) => setNewTempPassword(e.target.value)}
+                        placeholder="Mínimo 6 caracteres"
+                        className="w-full px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs font-mono font-bold text-[#111c2d] focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#111c2d] mb-1">
+                      Plan Asignado:
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['gratuito', 'pro', 'premium'] as const).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setNewPlan(p)}
+                          className={`py-2 rounded-xl font-bold capitalize transition-all cursor-pointer border ${
+                            newPlan === p
+                              ? 'bg-[#111c2d] text-white border-[#111c2d] shadow-xs'
+                              : 'bg-[#FAF8F5] text-[#554336] border-[#dbc2b0]/50 hover:bg-white'
+                          }`}
+                        >
+                          {p === 'gratuito' ? 'Gratis ($0)' : p === 'pro' ? 'Pro ($9.99)' : 'Premium ($19.99)'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-[#111c2d]">
+                        Días de Suscripción:
+                      </label>
+                      <span className="text-[10px] text-[#554336]">30 días por defecto</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="3650"
+                        required
+                        value={newSubscriptionDays}
+                        onChange={(e) => setNewSubscriptionDays(Number(e.target.value) || 30)}
+                        className="w-24 px-3 py-2 rounded-xl border border-[#dbc2b0]/60 bg-[#FAF8F5] text-xs font-bold text-[#111c2d] focus:bg-white focus:outline-none"
+                      />
+                      <div className="flex items-center gap-1.5 flex-1 flex-wrap">
+                        {[30, 60, 90, 365].map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setNewSubscriptionDays(d)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                              newSubscriptionDays === d
+                                ? 'bg-[#8d4b00] text-white border-[#8d4b00]'
+                                : 'bg-[#FAF8F5] text-[#554336] border-[#dbc2b0]/40 hover:bg-white'
+                            }`}
+                          >
+                            {d === 365 ? '1 Año (365d)' : `${d}d`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 mt-6 pt-4 border-t border-[#f0ebe3]">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreateModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-[#554336] hover:bg-[#FAF8F5] transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-6 py-2.5 rounded-xl bg-[#006c4a] hover:bg-[#005238] text-white text-xs font-black shadow-md transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 active:scale-95"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>
+                          <span>Creando Cliente...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-[16px]">person_add</span>
+                          <span>Crear Cliente</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
         </div>
       )}

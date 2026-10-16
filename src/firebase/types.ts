@@ -112,6 +112,7 @@ export interface UserProfile {
   nombre?: string;
   email?: string;
   password?: string;
+  telefono?: string;
   fecha_creacion?: string;
 }
 

@@ -94,6 +94,22 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
     onShowToast('Abriendo WhatsApp para notificar pago al Administrador...', 'chat');
   };
 
+  // WhatsApp Direct Sales Request (+584241289468)
+  const handleRequestPlanWhatsApp = (plan: 'Gratis' | 'Pro' | 'Premium') => {
+    const adminPhone = '584241289468';
+    let message = '';
+    if (plan === 'Gratis') {
+      message = 'Hola William, quiero activar el Plan Gratis para mi bodega.';
+    } else if (plan === 'Pro') {
+      message = 'Hola William, quiero activar el Plan Pro para mi bodega.';
+    } else {
+      message = 'Hola William, quiero activar el Plan Premium para mi bodega.';
+    }
+    const encoded = encodeURIComponent(message);
+    window.open(`https://wa.me/${adminPhone}?text=${encoded}`, '_blank');
+    onShowToast(`Abriendo WhatsApp para solicitar el Plan ${plan}...`, 'chat');
+  };
+
   const scrollToSection = (id: string) => {
     setIsMobileMenuOpen(false);
     const element = document.getElementById(id);
@@ -184,11 +200,11 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                 </button>
                 <button
                   type="button"
-                  onClick={() => onNavigate('/register')}
-                  className="px-4 py-2.5 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                  onClick={() => scrollToSection('pricing')}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                 >
-                  <span className="material-symbols-outlined text-[17px]">rocket_launch</span>
-                  Probar Gratis
+                  <span className="material-symbols-outlined text-[17px]">chat</span>
+                  Solicitar Cuenta
                 </button>
               </>
             )}
@@ -253,11 +269,14 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
                 <>
                   <button
                     type="button"
-                    onClick={() => onNavigate('/register')}
-                    className="w-full py-3 rounded-xl bg-[#8d4b00] text-white text-xs font-black text-center flex items-center justify-center gap-1.5"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      scrollToSection('pricing');
+                    }}
+                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black text-center flex items-center justify-center gap-1.5"
                   >
-                    <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
-                    🚀 Probar Gratis (5 Productos)
+                    <span className="material-symbols-outlined text-[18px]">chat</span>
+                    📲 Solicitar Cuenta por WhatsApp
                   </button>
                   <button
                     type="button"
@@ -308,10 +327,10 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
             <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3.5">
               <button
                 type="button"
-                onClick={() => onNavigate('/register')}
-                className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-[#8d4b00] hover:bg-[#b15f00] text-white font-black text-sm sm:text-base shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                onClick={() => scrollToSection('pricing')}
+                className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm sm:text-base shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
-                <span>🚀 Probar Gratis (5 Productos)</span>
+                <span>📲 Solicitar Cuenta por WhatsApp</span>
                 <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
               </button>
 
@@ -843,10 +862,11 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
               <div className="pt-8">
                 <button
                   type="button"
-                  onClick={() => onNavigate('/register')}
-                  className="w-full py-3.5 px-4 rounded-xl border-2 border-[#8d4b00] text-[#8d4b00] hover:bg-[#8d4b00] hover:text-white font-black text-xs sm:text-sm transition-all text-center cursor-pointer active:scale-95"
+                  onClick={() => handleRequestPlanWhatsApp('Gratis')}
+                  className="w-full py-4 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
-                  🚀 Probar Gratis
+                  <span className="material-symbols-outlined text-[18px]">chat</span>
+                  <span>📲 Solicitar Cuenta por WhatsApp</span>
                 </button>
               </div>
             </div>
@@ -924,11 +944,11 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
               <div className="pt-8">
                 <button
                   type="button"
-                  onClick={() => openPaymentModal('pro', billingCycle)}
-                  className="w-full py-4 px-4 rounded-xl bg-[#8d4b00] hover:bg-[#b15f00] text-white font-black text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  onClick={() => handleRequestPlanWhatsApp('Pro')}
+                  className="w-full py-4 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
-                  <span className="material-symbols-outlined text-[20px]">workspace_premium</span>
-                  {billingCycle === 'annual' ? 'Suscribirme a Pro Anual ($100)' : 'Suscribirme a Pro ($9.99/mes)'}
+                  <span className="material-symbols-outlined text-[18px]">chat</span>
+                  <span>📲 Solicitar Cuenta por WhatsApp</span>
                 </button>
               </div>
             </div>
@@ -1006,11 +1026,11 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
               <div className="pt-8">
                 <button
                   type="button"
-                  onClick={() => openPaymentModal('premium', billingCycle)}
-                  className="w-full py-4 px-4 rounded-xl bg-[#111c2d] hover:bg-[#203350] text-[#ffdcc3] font-black text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  onClick={() => handleRequestPlanWhatsApp('Premium')}
+                  className="w-full py-4 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
-                  <span className="material-symbols-outlined text-[20px]">diamond</span>
-                  {billingCycle === 'annual' ? 'Obtener Premium Anual ($200)' : 'Obtener Premium ($19.99/mes)'}
+                  <span className="material-symbols-outlined text-[18px]">chat</span>
+                  <span>📲 Solicitar Cuenta por WhatsApp</span>
                 </button>
               </div>
             </div>
@@ -1734,10 +1754,10 @@ Por favor confirmar la activación. ¡Muchas gracias!`;
               Iniciar Sesión
             </button>
             <button
-              onClick={() => onNavigate('/register')}
+              onClick={() => scrollToSection('pricing')}
               className="hover:text-[#8d4b00] transition-colors cursor-pointer"
             >
-              Registrar Negocio
+              Solicitar Cuenta
             </button>
             <button
               onClick={() => openPaymentModal('pro')}

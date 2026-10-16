@@ -285,6 +285,27 @@ export default function App() {
     if (!organization?.id) return;
 
     const unsubOrg = subscribeToOrganization(organization.id, (updatedOrg) => {
+      const isSuper = isSuperAdmin(currentUser?.email || userProfile?.email);
+      const isPending = !isSuper && (
+        updatedOrg.status === 'pendiente_pago' ||
+        updatedOrg.subscriptionStatus === 'pendiente_pago'
+      );
+
+      if (isPending) {
+        // FORZAR CIERRE DE SESIÓN LOCAL Y MOSTRAR VISTA DE PAGO
+        clearActiveStoredSession();
+        authLogout().catch(console.warn);
+        setCurrentUser(null);
+        setUserProfile(null);
+        setOrganization(null);
+        setActiveOrganizationId(null);
+        const plan = (updatedOrg.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro';
+        setDirectPaymentPlan(plan);
+        setIsDirectPaymentOpen(true);
+        showToast('⚠️ Cuenta en estado Pendiente de Pago. Completa tu pago para acceder.', 'payments');
+        return;
+      }
+
       setOrganization((prev) => {
         if (!prev) return updatedOrg;
 
@@ -408,19 +429,33 @@ export default function App() {
 
   // Handler: Auth Success from AuthView
   const handleAuthSuccess = (session: AuthSession) => {
+    const isSuper = isSuperAdmin(session.user?.email || session.profile?.email);
+    const isPending = !isSuper && (
+      session.organization?.status === 'pendiente_pago' ||
+      session.organization?.subscriptionStatus === 'pendiente_pago'
+    );
+
+    if (isPending) {
+      // FORZAR CIERRE DE SESIÓN LOCAL Y MOSTRAR VISTA DE PAGO
+      clearActiveStoredSession();
+      authLogout().catch(console.warn);
+      setCurrentUser(null);
+      setUserProfile(null);
+      setOrganization(null);
+      setActiveOrganizationId(null);
+      const plan = (session.organization.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro';
+      setDirectPaymentPlan(plan);
+      setIsDirectPaymentOpen(true);
+      showToast('⚠️ Tu cuenta está en estado Pendiente de Pago. Completa tu pago para activar tu negocio.', 'payments');
+      return;
+    }
+
     saveActiveStoredSession(session);
     setCurrentUser(session.user);
     setUserProfile(session.profile);
     setOrganization(session.organization);
     setActiveOrganizationId(session.organization.id);
     navigate('/');
-
-    if (session.organization?.subscriptionStatus === 'pendiente_pago') {
-      const plan = (session.organization.plan_suscripcion as any) === 'premium' ? 'premium' : 'pro';
-      setDirectPaymentPlan(plan);
-      setIsDirectPaymentOpen(true);
-      showToast('Por favor completa y reporta tu pago para activar tu suscripción', 'payments');
-    }
   };
 
   // Handler: Logout
@@ -670,7 +705,7 @@ export default function App() {
       return (
         <>
           <AuthView
-            initialMode={currentPath === '/register' ? 'register' : 'login'}
+            initialMode="login"
             onAuthSuccess={handleAuthSuccess}
             onNavigate={navigate}
             onShowToast={showToast}

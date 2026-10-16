@@ -27,7 +27,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
   onShowToast,
   bcvRate = 877.90
 }) => {
-  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -408,34 +408,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
             </div>
           ) : (
             <>
-              {/* Mode Switcher Tabs */}
-              <div className="flex rounded-xl bg-[#f0f3ff] p-1 mb-6 border border-[#dbc2b0]/30">
-                <button
-                  type="button"
-                  onClick={() => switchMode('login')}
-                  className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    mode === 'login'
-                      ? 'bg-white text-[#8d4b00] shadow-xs'
-                      : 'text-[#554336] hover:text-[#111c2d]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">login</span>
-                  Iniciar Sesión
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchMode('register')}
-                  className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    mode === 'register'
-                      ? 'bg-[#8d4b00] text-white shadow-xs'
-                      : 'text-[#554336] hover:text-[#111c2d]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">storefront</span>
-                  Registrar Bodega
-                </button>
-              </div>
-
           {/* Error Banner */}
           {errorMessage && (
             <div className="mb-5 p-3.5 rounded-xl bg-[#ffdad6] border border-[#ba1a1a]/30 text-[#ba1a1a] text-xs font-semibold flex items-start gap-2 animate-in fade-in">
@@ -735,31 +707,19 @@ export const AuthView: React.FC<AuthViewProps> = ({
             </button>
           </div>
 
-          {/* Toggle Footnote */}
-          <div className="mt-5 text-center text-xs text-[#554336]">
-            {mode === 'login' ? (
-              <p>
-                ¿Aún no tienes una cuenta registrada?{' '}
-                <button
-                  type="button"
-                  onClick={() => switchMode('register')}
-                  className="font-bold text-[#8d4b00] hover:underline cursor-pointer"
-                >
-                  Registra tu negocio gratis
-                </button>
-              </p>
-            ) : (
-              <p>
-                ¿Ya registraste tu negocio?{' '}
-                <button
-                  type="button"
-                  onClick={() => switchMode('login')}
-                  className="font-bold text-[#8d4b00] hover:underline cursor-pointer"
-                >
-                  Inicia sesión aquí
-                </button>
-              </p>
-            )}
+          {/* Direct Sales WhatsApp Notice */}
+          <div className="mt-5 text-center text-xs text-[#554336] pt-3 border-t border-[#f0ebe3]">
+            <p>
+              ¿Aún no tienes una cuenta para tu negocio?{' '}
+              <a
+                href="https://wa.me/584241289468?text=Hola%20William%2C%20quiero%20solicitar%20una%20cuenta%20para%20mi%20bodega."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-emerald-700 hover:text-emerald-800 hover:underline inline-flex items-center gap-1"
+              >
+                <span>📲 Solicita tu acceso por WhatsApp</span>
+              </a>
+            </p>
           </div>
           </>
           )}
